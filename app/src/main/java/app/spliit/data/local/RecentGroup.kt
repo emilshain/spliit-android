@@ -2,6 +2,7 @@ package app.spliit.data.local
 
 import app.spliit.data.model.Participant
 import app.spliit.data.model.SplitMode
+import app.spliit.data.remote.ExpenseFormValues
 import app.spliit.data.remote.NullableInstantSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -113,6 +114,40 @@ data class DefaultSplit(
      */
     val shares: Map<String, Int>? = null,
 ) {
+    companion object {
+        /**
+         * What to remember from an expense that has just been saved.
+         *
+         * Built from the payload rather than from the form, because these numbers have been
+         * through validation: every share is parsed, positive, and — under the modes that require
+         * it — adds up.
+         *
+         * An even split of the whole group is kept as the *group*, with no shares at all. Those
+         * hundreds say nothing under EVENLY beyond who was in it, and "everybody" is the one
+         * answer that should still be right after somebody moves in: written down as two names, a
+         * third flatmate would be left out of every expense from then on, silently. Under the
+         * other modes the numbers do mean something and cannot be handed to somebody who was
+         * never given any, so those keep their names and leave a newcomer out.
+         */
+        fun remembering(
+            values: ExpenseFormValues,
+            participants: List<Participant>,
+        ): DefaultSplit {
+            val paidFor = values.paidFor.mapTo(HashSet()) { it.participant }
+            val isOnlyMembership =
+                values.splitMode == SplitMode.EVENLY && paidFor == participants.mapTo(HashSet()) { it.id }
+
+            return DefaultSplit(
+                splitMode = values.splitMode,
+                shares = if (values.splitMode == SplitMode.BY_AMOUNT || isOnlyMembership) {
+                    null
+                } else {
+                    values.paidFor.associate { it.participant to it.shares }
+                },
+            )
+        }
+    }
+
     /**
      * Whether this still describes a split of [participants].
      *

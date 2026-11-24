@@ -8,7 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.spliit.AppContainer
-import app.spliit.ui.groups.GroupDetailScreen
+import app.spliit.ui.group.GroupScreen
 import app.spliit.ui.groups.GroupsListScreen
 import app.spliit.ui.theme.SpliitTheme
 
@@ -36,7 +36,7 @@ fun SpliitApp(container: AppContainer) {
                 route = GROUP_DETAIL,
                 arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
             ) { entry ->
-                GroupDetailScreen(
+                GroupScreen(
                     container = container,
                     groupId = entry.arguments?.getString("groupId").orEmpty(),
                     onBack = { navController.popBackStack() },
