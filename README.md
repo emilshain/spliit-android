@@ -57,6 +57,69 @@ export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
 
 `local.properties` is git-ignored; a fresh clone needs its own `sdk.dir`.
 
+## Installing on a phone
+
+`minSdk = 26`, so any phone on Android 8.0 or newer can run it. The release APK is ~1.9 MB.
+
+### Get the APK
+
+`dist/` is not committed, so either use the build already there or make one:
+
+```sh
+export JAVA_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/jdk21"
+export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
+
+./gradlew :app:assembleRelease
+
+BT="$ANDROID_HOME/build-tools/35.0.0"
+KS="C:/Users/EmilShain/Code/spliit-workspace/.tooling/keys/spliit-test.jks"
+
+mkdir -p dist
+"$BT/zipalign.exe" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk dist/aligned.apk
+"$BT/apksigner.bat" sign --ks "$KS" --ks-key-alias spliit \
+  --ks-pass pass:spliitdev --key-pass pass:spliitdev \
+  --out dist/spliit-0.1.0-release.apk dist/aligned.apk
+rm dist/aligned.apk
+
+# what is in it: package app.spliit, minSdk 26, targetSdk 35
+"$BT/aapt2.exe" dump badging dist/spliit-0.1.0-release.apk | head -3
+```
+
+The `.exe` / `.bat` suffixes are not optional in Git Bash: `apksigner` on its own is not found, and
+an unsigned APK will not install.
+
+That is `dist/spliit-0.1.0-release.apk`, signed with the local test key at
+`../.tooling/keys/spliit-test.jks`. It is not a Play-ready release: the key is a throwaway, so
+keep that keystore if you want later builds to upgrade over this one instead of having to be
+uninstalled first.
+
+### Install it
+
+With the phone plugged in and USB debugging on (Developer options → USB debugging):
+
+```sh
+adb devices                  # confirm the phone is listed and authorised
+adb install -r dist/spliit-0.1.0-release.apk
+```
+
+Without adb — copy the file over and tap it:
+
+```sh
+adb push dist/spliit-0.1.0-release.apk /sdcard/Download/   # or USB file transfer, or email it
+```
+
+Then open **Files → Downloads → spliit-0.1.0-release.apk**, allow "install unknown apps" for the
+Files app when prompted, and tap **Install**. Play Protect may ask to scan the app first; that is
+normal for a sideloaded APK.
+
+### Two things to know
+
+- If a debug build is already installed on that phone, uninstall it first. Debug and release are
+  signed with different keys and Android refuses the upgrade (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+- The release build only talks to `https://spliit.app`. Plain-`http://` local instances are
+  reachable from the debug build alone (see [`docs/LOCAL_TESTING.md`](docs/LOCAL_TESTING.md)), so
+  use `spliit-0.1.0-debug.apk` for that.
+
 ## Testing
 
 ```sh
