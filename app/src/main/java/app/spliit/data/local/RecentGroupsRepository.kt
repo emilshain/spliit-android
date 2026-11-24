@@ -1,6 +1,7 @@
 package app.spliit.data.local
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -24,12 +25,18 @@ private val Context.recentGroupsDataStore by preferencesDataStore(name = "recent
  * only copy and there are no tombstones: a removed group is simply gone from this device.
  */
 class RecentGroupsRepository(
-    private val context: Context,
+    private val dataStore: DataStore<Preferences>,
     private val now: () -> Instant = Instant::now,
 ) {
 
+    /**
+     * The app's own store: the one DataStore the process shares, keyed by name on the
+     * application context.
+     */
+    constructor(context: Context) : this(context.recentGroupsDataStore, Instant::now)
+
     /** All remembered groups, newest first. */
-    val groups: Flow<List<RecentGroup>> = context.recentGroupsDataStore.data.map { preferences ->
+    val groups: Flow<List<RecentGroup>> = dataStore.data.map { preferences ->
         RecentGroupsLogic.ordered(RecentGroupsCodec.decode(preferences[GROUPS]))
     }
 
@@ -92,7 +99,7 @@ class RecentGroupsRepository(
         RecentGroupsLogic.actorId(snapshot(), groupId, participants)
 
     private suspend fun edit(change: (List<RecentGroup>) -> List<RecentGroup>) {
-        context.recentGroupsDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             val current = RecentGroupsCodec.decode(preferences[GROUPS])
             preferences[GROUPS] = RecentGroupsCodec.encode(change(current))
         }
