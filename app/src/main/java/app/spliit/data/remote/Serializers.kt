@@ -9,6 +9,8 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import java.math.BigDecimal
@@ -29,6 +31,29 @@ object InstantSerializer : KSerializer<Instant> {
 
     override fun deserialize(decoder: Decoder): Instant =
         Instant.parse(decoder.decodeString())
+}
+
+/**
+ * A timestamp that may be absent.
+ *
+ * Needed because `@Serializable(with = …)` must match the property's type exactly, and the
+ * stored group's timestamps are optional (a list written before they existed has neither).
+ */
+object NullableInstantSerializer : KSerializer<Instant?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("app.spliit.NullableInstant", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: Instant?) {
+        if (value == null) (encoder as JsonEncoder).encodeJsonElement(JsonNull)
+        else encoder.encodeString(value.toString())
+    }
+
+    override fun deserialize(decoder: Decoder): Instant? {
+        val element = (decoder as? JsonDecoder)?.decodeJsonElement()
+            ?: return Instant.parse(decoder.decodeString())
+        if (element is JsonNull) return null
+        return Instant.parse(element.jsonPrimitive.content)
+    }
 }
 
 /** A `Prisma.Decimal` arrives as a string; a self-hosted instance may send a number. */
