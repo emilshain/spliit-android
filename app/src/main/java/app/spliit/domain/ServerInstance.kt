@@ -48,5 +48,18 @@ object ServerInstance {
     fun isDefault(baseUrl: String): Boolean =
         baseUrl.trimEnd('/').equals(DEFAULT_BASE_URL, ignoreCase = true)
 
+    /**
+     * What to call an instance on screen: the host, with the port and path when it has them,
+     * and never the scheme. "spliit.app" is what people call it; a row reading
+     * "https://spliit.app/" is a URL rather than a name.
+     */
+    fun displayName(baseUrl: String): String {
+        val uri = runCatching { URI(baseUrl.trim()) }.getOrNull() ?: return baseUrl
+        val host = uri.host?.takeIf { it.isNotBlank() } ?: return baseUrl
+        val port = if (uri.port == -1) "" else ":${uri.port}"
+        val path = uri.path.orEmpty().trim('/')
+        return if (path.isEmpty()) "$host$port" else "$host$port/$path"
+    }
+
     private val SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
 }
