@@ -22,6 +22,24 @@ C:\Users\EmilShain\Code\spliit-workspace\
   spliit-android\    # this repository
 ```
 
+## Toolchain
+
+Everything builds from the workspace without a system-wide SDK install:
+
+| Component | Version | Location |
+|---|---|---|
+| JDK | Temurin 21 | `../.tooling/jdk21` (via `org.gradle.java.home`) |
+| Android SDK | platform 35, build-tools 35.0.0 | `../.tooling/sdk` (via `local.properties`) |
+| Gradle | 8.13 (wrapper) | `./gradlew` |
+| AGP / Kotlin | 8.9.2 / 2.1.21 | `build.gradle.kts` |
+
+```sh
+./gradlew :app:assembleDebug
+```
+
+`local.properties` is git-ignored; a fresh clone needs its own `sdk.dir`.
+
 ## Status
 
-Phase 0 — workspace setup and codebase audit.
+Phase 0 complete: workspace, reference clones, codebase audit (`docs/AUDIT.md`),
+and a verified `assembleDebug` scaffold.
