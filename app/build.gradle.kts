@@ -53,6 +53,8 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric renders Compose screens, which needs the merged debug manifest and resources.
+        unitTests.isIncludeAndroidResources = true
         // Forwarded so `-Dspliit.skipLive=true` can skip the live spliit.app tests.
         unitTests.all {
             it.systemProperty("spliit.skipLive", System.getProperty("spliit.skipLive") ?: "false")
@@ -90,4 +92,12 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+
+    // UI tests that run on the JVM: the Phase 2 screens are exercised through Robolectric
+    // rather than only built.
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.15.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

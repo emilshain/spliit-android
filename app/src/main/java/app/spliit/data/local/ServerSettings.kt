@@ -1,6 +1,7 @@
 package app.spliit.data.local
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -17,9 +18,12 @@ private val Context.serverDataStore by preferencesDataStore(name = "server")
  * Per-group overrides live on the saved group, as they do in the iOS app; this is the fallback
  * for groups that carry no address, and the default a fresh install starts on.
  */
-class ServerSettings(private val context: Context) {
+class ServerSettings(private val dataStore: DataStore<Preferences>) {
 
-    val baseUrl: Flow<String> = context.serverDataStore.data.map { preferences ->
+    /** The app's own store: the one DataStore the process shares, keyed by name. */
+    constructor(context: Context) : this(context.serverDataStore)
+
+    val baseUrl: Flow<String> = dataStore.data.map { preferences ->
         preferences[BASE_URL] ?: ServerInstance.DEFAULT_BASE_URL
     }
 
@@ -30,14 +34,14 @@ class ServerSettings(private val context: Context) {
      */
     suspend fun setBaseUrl(raw: String): Boolean {
         val normalized = ServerInstance.normalize(raw) ?: return false
-        context.serverDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[BASE_URL] = normalized
         }
         return true
     }
 
     suspend fun reset() {
-        context.serverDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences.remove(BASE_URL)
         }
     }

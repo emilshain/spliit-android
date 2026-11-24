@@ -7,6 +7,7 @@ import app.spliit.data.remote.TrpcClient
 import app.spliit.domain.ServerInstance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import okhttp3.Call
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -17,12 +18,17 @@ import java.util.concurrent.ConcurrentHashMap
  * group that appears not to exist. They are cached because building one allocates an HTTP
  * stack, and there are only ever a handful of instances.
  */
-class AppContainer(context: Context) {
+class AppContainer(
+    context: Context,
+    /** The on-disk stores, overridable so a test can give a screen an in-memory one. */
+    recentGroupStore: RecentGroupsRepository = RecentGroupsRepository(context.applicationContext),
+    serverSettingsStore: ServerSettings = ServerSettings(context.applicationContext),
+    /** Where HTTP goes: the default client in the app, a canned instance in a test. */
+    private val callFactory: Call.Factory = TrpcClient.defaultCallFactory,
+) {
 
-    private val appContext = context.applicationContext
-
-    val serverSettings = ServerSettings(appContext)
-    val recentGroups = RecentGroupsRepository(appContext)
+    val serverSettings = serverSettingsStore
+    val recentGroups = recentGroupStore
 
     private val clients = ConcurrentHashMap<String, TrpcClient>()
 
@@ -34,7 +40,7 @@ class AppContainer(context: Context) {
     /** A client for an instance named directly: a group being created or added from a link. */
     fun client(instanceUrl: String): TrpcClient {
         val normalized = ServerInstance.normalize(instanceUrl) ?: instanceUrl.trimEnd('/')
-        return clients.getOrPut(normalized) { TrpcClient(normalized) }
+        return clients.getOrPut(normalized) { TrpcClient(normalized, callFactory) }
     }
 
     /** The instance a group is on: the address stored with it, or the default. */
