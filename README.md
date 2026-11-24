@@ -57,6 +57,16 @@ export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
 
 `local.properties` is git-ignored; a fresh clone needs its own `sdk.dir`.
 
+## Testing
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug -Dspliit.skipLive=true
+```
+
+`-Dspliit.skipLive=true` skips the tests that talk to the real `spliit.app`. The UI tests render
+Compose on the JVM under Robolectric; to look at the screens on an emulator against a local fake
+instance, see [`docs/LOCAL_TESTING.md`](docs/LOCAL_TESTING.md).
+
 ## Status
 
 Phase 0 complete: workspace, reference clones, codebase audit (`docs/AUDIT.md`),
