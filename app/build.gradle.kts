@@ -53,6 +53,10 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Forwarded so `-Dspliit.skipLive=true` can skip the live spliit.app tests.
+        unitTests.all {
+            it.systemProperty("spliit.skipLive", System.getProperty("spliit.skipLive") ?: "false")
+        }
     }
 }
 
