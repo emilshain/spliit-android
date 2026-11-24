@@ -37,6 +37,14 @@ Everything builds from the workspace without a system-wide SDK install:
 ./gradlew :app:assembleDebug
 ```
 
+`org.gradle.java.home` only applies to the build daemon, so a shell whose default
+JDK is not 21 must also export the launcher's JDK:
+
+```sh
+export JAVA_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/jdk21"
+export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
+```
+
 `local.properties` is git-ignored; a fresh clone needs its own `sdk.dir`.
 
 ## Status
