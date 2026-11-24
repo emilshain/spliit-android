@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -150,14 +149,4 @@ fun AddGroupLinkSheet(
         }
     }
 
-    problem?.let { message ->
-        // The message is already inline; this exists only so a failure that arrived from the
-        // server is not a line of text the user has to notice by accident.
-        AlertDialog(
-            onDismissRequest = { problem = null },
-            title = { Text("Couldn’t add that group") },
-            text = { Text(message) },
-            confirmButton = { TextButton(onClick = { problem = null }) { Text("OK") } },
-        )
-    }
 }
