@@ -19,8 +19,18 @@ This project lives beside two read-only reference clones:
 C:\Users\EmilShain\Code\spliit-workspace\
   ref-spliit-ios\    # SwiftUI reference (UI + logic source of truth)
   ref-spliit-web\    # Next.js backend (tRPC contract + Prisma schema)
+  ref-spliit2go\    # unofficial Flutter/Dart Android client (independent port)
   spliit-android\    # this repository
 ```
+
+`ref-spliit2go` is [sharneng/spliit2go](https://github.com/sharneng/spliit2go), an
+existing unofficial Android client built in Flutter. It is read-only reference, not a
+base: the brief here is a 1:1 port of the iOS app, so `ref-spliit-ios` stays the source
+of truth for UI and logic. spliit2go is useful as a second opinion on the backend —
+`lib/api/spliit_client.dart` (its own tRPC client), `lib/services/expense_shares.dart`,
+`lib/services/balance_calculator.dart` and `lib/services/date_only.dart` are independent
+implementations of the same maths, and its `docs/decisions/` records hard-won detail
+about the API that the server source does not spell out.
 
 ## Toolchain
 
