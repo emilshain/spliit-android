@@ -44,6 +44,10 @@ Monogram palette (identical in both themes, no dark variant):
 | `Monogram7` | `#4D7C0F` | olive |
 | `Monogram8` | `#7C3AED` | violet |
 
+These values were re-derived directly from each `*.colorset/Contents.json`
+(`color-space: srgb`, components as `0xRRGGBB`, second entry = dark appearance)
+and match exactly.
+
 Everything else is a **system** colour on iOS: `secondarySystemGroupedBackground`
 for cards, `tertiarySystemFill` for the category icon slot, `.primary` /
 `.secondary` for text, `.separator`. The Android equivalent is a Material 3
@@ -84,73 +88,84 @@ money screen is built, recorded here as the one unavoidable typography substitut
 
 ### 1.4 SF Symbol → Material icon map
 
-| SF Symbol | Material (Compose `Icons.*`) |
-|---|---|
-| `list.bullet` | `AutoMirrored.Filled.List` |
-| `arrow.left.arrow.right` | `Filled.SwapHoriz` |
-| `chart.pie` | `Filled.PieChart` |
-| `info.circle` | `Filled.Info` |
-| `plus` | `Filled.Add` |
-| `pencil` | `Filled.Edit` |
-| `magnifyingglass` | `Filled.Search` |
-| `ellipsis` / `ellipsis.circle` | `Filled.MoreVert` |
-| `star` / `star.fill` | `Filled.Star` / `Filled.Star` (tinted) |
-| `archivebox` | `Filled.Archive` |
-| `trash` | `Filled.Delete` |
-| `checkmark` | `Filled.Check` |
-| `xmark` | `Filled.Close` |
-| `chevron.right` | `Filled.ChevronRight` |
-| `chevron.down` | `Filled.ExpandMore` |
-| `square.and.arrow.up` | `Filled.Share` |
-| `doc.on.doc` | `Filled.ContentCopy` |
-| `qrcode.viewfinder` | `Filled.QrCodeScanner` |
-| `camera` / `photo` | `Filled.PhotoCamera` / `Filled.Image` |
-| `exclamationmark.triangle` | `Filled.Warning` |
-| `arrow.clockwise` | `Filled.Refresh` |
-| `banknote` (fallback) | `Filled.Payments` |
-| `ticket` | `Filled.ConfirmationNumber` |
-| `dice` | `Filled.Casino` |
-| `movieclapper` | `Filled.Movie` |
-| `music.note` | `Filled.MusicNote` |
-| `dumbbell` | `Filled.FitnessCenter` |
-| `fork.knife` | `Filled.Restaurant` |
-| `menucard` | `Filled.MenuBook` |
-| `cart` | `Filled.ShoppingCart` |
-| `wineglass` | `Filled.WineBar` |
-| `house` | `Filled.Home` |
-| `powerplug` | `Filled.Power` |
-| `chair.lounge` | `Filled.Chair` |
-| `lamp.table` | `Filled.Light` |
-| `wrench.adjustable` | `Filled.Build` |
-| `building.columns` | `Filled.AccountBalance` |
-| `cat` | `Filled.Pets` |
-| `key` | `Filled.Key` |
-| `wrench.and.screwdriver` | `Filled.Handyman` |
-| `stroller` | `Filled.ChildFriendly` |
-| `tshirt` | `Filled.Checkroom` |
-| `hand.raised` | `Filled.PanTool` |
-| `books.vertical` | `Filled.LibraryBooks` |
-| `gift` | `Filled.CardGiftcard` |
-| `stethoscope` | `Filled.MedicalServices` |
-| `bus` | `Filled.DirectionsBus` |
-| `bicycle` | `Filled.DirectionsBike` |
-| `tram` | `Filled.Tram` |
-| `car` | `Filled.DirectionsCar` |
-| `fuelpump` | `Filled.LocalGasStation` |
-| `bed.double` | `Filled.Hotel` |
-| `parkingsign` | `Filled.LocalParking` |
-| `airplane` | `Filled.Flight` |
-| `car.side` | `Filled.LocalTaxi` |
-| `sparkles` | `Filled.AutoAwesome` |
-| `bolt` | `Filled.Bolt` |
-| `thermometer.sun` | `Filled.Thermostat` |
-| `phone` | `Filled.Phone` |
-| `drop` | `Filled.WaterDrop` |
+Every name below was checked against the real artifacts (`material-icons-core`
+1.7.8 and `material-icons-extended` 1.7.8, the versions Compose BOM 2025.05.01
+resolves), not from memory. The **Src** column says which artifact provides it —
+`core` ships transitively with Material 3, `ext` needs the explicit
+`androidx.compose.material:material-icons-extended` dependency, `auto` is
+`Icons.AutoMirrored.Filled` (directional, RTL-aware).
+
+| SF Symbol | Material icon | Src |
+|---|---|---|
+| `list.bullet` | `AutoMirrored.Filled.List` | auto |
+| `arrow.left.arrow.right` | `Filled.SwapHoriz` | ext |
+| `chart.pie` | `Filled.PieChart` | ext |
+| `info.circle` | `Filled.Info` | core |
+| `plus` | `Filled.Add` | core |
+| `pencil` | `Filled.Edit` | core |
+| `magnifyingglass` | `Filled.Search` | core |
+| `ellipsis` / `ellipsis.circle` | `Filled.MoreVert` | core |
+| `star` / `star.fill` | `Filled.Star` (tinted when set) | core |
+| `archivebox` | `Filled.Archive` | ext |
+| `trash` | `Filled.Delete` | core |
+| `checkmark` | `Filled.Check` | core |
+| `xmark` | `Filled.Close` | core |
+| `chevron.right` | `Filled.ChevronRight` | ext |
+| `chevron.down` | `Filled.ExpandMore` | ext |
+| `square.and.arrow.up` | `Filled.Share` | core |
+| `doc.on.doc` | `Filled.ContentCopy` | ext |
+| `qrcode.viewfinder` | `Filled.QrCodeScanner` | ext |
+| `camera` / `photo` | `Filled.PhotoCamera` / `Filled.Image` | ext |
+| `exclamationmark.triangle` | `Filled.Warning` | core |
+| `arrow.clockwise` | `Filled.Refresh` | core |
+| `banknote` (fallback) | `Filled.Payments` | ext |
+| `ticket` | `Filled.ConfirmationNumber` | ext |
+| `dice` | `Filled.Casino` | ext |
+| `movieclapper` | `Filled.Movie` | ext |
+| `music.note` | `Filled.MusicNote` | ext |
+| `dumbbell` | `Filled.FitnessCenter` | ext |
+| `fork.knife` | `Filled.Restaurant` | ext |
+| `menucard` | `Filled.MenuBook` | ext |
+| `cart` | `Filled.ShoppingCart` | core |
+| `wineglass` | `Filled.WineBar` | ext |
+| `house` | `Filled.Home` | core |
+| `powerplug` | `Filled.Power` | ext |
+| `chair.lounge` | `Filled.Chair` | ext |
+| `lamp.table` | `Filled.Light` | ext |
+| `wrench.adjustable` | `Filled.Build` | core |
+| `building.columns` | `Filled.AccountBalance` | ext |
+| `cat` | `Filled.Pets` | ext |
+| `key` | `Filled.Key` | ext |
+| `wrench.and.screwdriver` | `Filled.Handyman` | ext |
+| `stroller` | `Filled.ChildFriendly` | ext |
+| `tshirt` | `Filled.Checkroom` | ext |
+| `hand.raised` | `Filled.PanTool` | ext |
+| `books.vertical` | `Filled.LibraryBooks` | ext |
+| `gift` | `Filled.CardGiftcard` | ext |
+| `stethoscope` | `Filled.MedicalServices` | ext |
+| `bus` | `Filled.DirectionsBus` | ext |
+| `bicycle` | `Filled.DirectionsBike` | ext |
+| `tram` | `Filled.Tram` | ext |
+| `car` | `Filled.DirectionsCar` | ext |
+| `fuelpump` | `Filled.LocalGasStation` | ext |
+| `bed.double` | `Filled.Hotel` | ext |
+| `parkingsign` | `Filled.LocalParking` | ext |
+| `airplane` | `Filled.Flight` | ext |
+| `car.side` | `Filled.LocalTaxi` | ext |
+| `sparkles` | `Filled.AutoAwesome` | ext |
+| `bolt` | `Filled.Bolt` | ext |
+| `thermometer.sun` | `Filled.Thermostat` | ext |
+| `phone` | `Filled.Phone` | core |
+| `drop` | `Filled.WaterDrop` | ext |
 
 Category key → icon is `"<grouping>/<name>"`, 47 entries, fallback `banknote`
 (`Shared/ExpenseCategoryIcon.swift`).
 
----
+Every one of the 62 names above resolves in 1.7.8 — no substitution was needed.
+Two notes for Phase 1: `material-icons-extended` is frozen at 1.7.8 and will not
+move with newer BOMs, so it is pinned through BOM 2025.05.01 and has to be
+re-pinned if the BOM is upgraded; and only seven of the core glyphs are
+automirrored, so `List` must be referenced as `Icons.AutoMirrored.Filled.List`.
 
 ## 2. Navigation map
 
@@ -410,18 +425,44 @@ Server schema (`prisma/schema.prisma`) agrees: `Group.currency String @default("
 
 ---
 
-## 7. Build environment findings
+## 7. Build environment (settled)
 
-- Git, `gh` authenticated as `emilshain`; repo created:
-  `https://github.com/emilshain/spliit-android`.
-- **JDK 25** (Temurin) is installed. AGP 8.x does not support 25 for its own
-  toolchain; the build needs a JDK 17 or 21 toolchain, configured via
-  `org.gradle.java.home` / `jvmToolchain(21)` (Gradle 8.13+ can download a
-  toolchain, or Android Studio's bundled JBR can be pointed at).
-- **No Android SDK found** (`ANDROID_HOME` unset, no `%LOCALAPPDATA%\Android\Sdk`).
-  Phase 1 must install command-line tools + `platforms;android-35`,
-  `build-tools;35.0.0`, and write `local.properties` — or the build cannot run.
-  This is the one Phase 1 blocker to resolve before any `:app:assembleDebug`.
+The host had no Android SDK, no Android Studio and only JDK 25 (AGP 8.x does not
+support 25). Everything is provisioned **inside the workspace** rather than
+system-wide, under `spliit-workspace/.tooling/`:
+
+| Component | Version | Location |
+|---|---|---|
+| JDK | Temurin 21.0.13.1+2 | `.tooling/jdk21` |
+| Android cmdline-tools | 11076708 | `.tooling/sdk/cmdline-tools/latest` |
+| Android SDK platform | `android-35` | `.tooling/sdk/platforms` |
+| Build tools | `35.0.0` | `.tooling/sdk/build-tools` |
+| Platform tools | latest | `.tooling/sdk/platform-tools` |
+| Gradle | 8.13 | wrapper, distribution from `.tooling/gradle` |
+
+Wiring:
+
+- `gradle.properties` → `org.gradle.java.home=<workspace>/.tooling/jdk21`
+- `local.properties` (git-ignored) → `sdk.dir=<workspace>/.tooling/sdk`
+- `build.gradle.kts` → AGP 8.9.2, Kotlin 2.1.21, compose compiler plugin
+- `app/build.gradle.kts` → `compileSdk 35`, `minSdk 26`, `targetSdk 35`,
+  `isCoreLibraryDesugaringEnabled = true`, `desugar_jdk_libs 2.1.5`,
+  JVM target 17, R8 + resource shrinking on release
+
+`assembleDebug` of a hello-world Compose activity (which also references
+`java.time.LocalDate`, exercising desugaring) is the acceptance check for the
+toolchain.
+
+## 7.1 Verification method
+
+- Colours: parsed every `Assets.xcassets/*.colorset/Contents.json` and rendered
+  the light and dark entries to hex.
+- Icons: downloaded `material-icons-core-android-1.7.8.aar` and
+  `material-icons-extended-android-1.7.8.aar`, unzipped `classes.jar`, and
+  enumerated `androidx/compose/material/icons/{filled,automirrored/filled}/*Kt`
+  — 2083 extended glyphs, 49 core glyphs, 138 + 7 automirrored.
+- Toolchain: JDK 21 and the SDK packages are asserted by an actual
+  `:app:assembleDebug`, not by the presence of files.
 
 ## 8. Deliberate scope boundaries
 
