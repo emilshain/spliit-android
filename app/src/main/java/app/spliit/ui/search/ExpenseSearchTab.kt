@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,7 +65,9 @@ fun ExpenseSearchTab(
 
     val trimmed = query.trim()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // The keyboard is up for as long as this screen is: the empty state and the results have to
+    // sit above it rather than behind it.
+    Box(modifier = Modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OutlinedTextField(
                 value = query,

@@ -210,7 +210,16 @@ fun GroupScreen(
                                 Tab(
                                     selected = tabIndex == index,
                                     onClick = { tabIndex = index },
-                                    text = { Text(title) },
+                                    // Four labels on one row: "Information" has to fit a quarter of
+                                    // the width without breaking, so it is set a size down.
+                                    text = {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    },
                                 )
                             }
                         }
