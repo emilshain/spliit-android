@@ -32,6 +32,7 @@ class FakeSpliitServer : Interceptor {
 
     private val answers = ConcurrentHashMap<String, String>()
     private val handlers = ConcurrentHashMap<String, (Request) -> String?>()
+    private val failures = ConcurrentHashMap<String, Int>()
     private val recorded = Collections.synchronizedList(mutableListOf<Call>())
 
     /** Answers `procedure` (e.g. `groups.list`) with [payload], wrapped in the superjson envelope. */
@@ -45,6 +46,14 @@ class FakeSpliitServer : Interceptor {
      */
     fun answerMatching(procedure: String, handler: (Request) -> String?) {
         handlers[procedure] = handler
+        // The handler is the more specific answer: a page depends on its cursor, so a fixed
+        // payload for the same procedure would hide it.
+        answers.remove(procedure)
+    }
+
+    /** Fails `procedure` the way a server having a bad day would, rather than as a missing one. */
+    fun fail(procedure: String, status: Int = 500) {
+        failures[procedure] = status
     }
 
     /** Every procedure called, in order. */
@@ -69,10 +78,27 @@ class FakeSpliitServer : Interceptor {
             url = request.url.toString(),
         )
 
-        val body = answers[procedure]
-            ?: handlers[procedure]?.invoke(request)?.let { envelope(it) }
-        val status = if (body == null) 404 else 200
-        val text = body ?: """{"error":{"json":{"message":"No answer for $procedure"}}}"""
+        val failedStatus = failures[procedure]
+        val body = if (failedStatus != null) {
+            """{"error":{"json":{"message":"Server error for $procedure","code":-32603,
+               "data":{"code":"INTERNAL_SERVER_ERROR","httpStatus":$failedStatus}}}}"""
+        } else {
+            answers[procedure] ?: handlers[procedure]?.invoke(request)?.let { envelope(it) }
+        }
+        // An instance that has never heard of a procedure answers exactly what a tRPC router
+        // does, so the client's own fallback logic is what gets exercised.
+        val status = when {
+            failedStatus != null -> failedStatus
+            body == null -> 404
+            else -> 200
+        }
+        val text = when {
+            failedStatus != null -> body.orEmpty()
+            body != null -> body
+            else -> """{"error":{"json":{"message":"No procedure found on path $procedure",
+                      "code":-32004,"data":{"code":"NOT_FOUND","httpStatus":404,
+                      "path":"$procedure"}}}}"""
+        }
 
         return Response.Builder()
             .request(request)

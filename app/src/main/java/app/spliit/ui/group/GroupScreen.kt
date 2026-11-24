@@ -17,6 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,15 +53,18 @@ import app.spliit.data.model.Reimbursement
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.ServerInstance
+import app.spliit.ui.activity.ActivityLogScreen
 import app.spliit.ui.balances.BalancesTab
 import app.spliit.ui.expenses.ExpenseFormSheet
 import app.spliit.ui.expenses.ExpenseListTab
 import app.spliit.ui.groups.ActiveUserPickerSheet
+import app.spliit.ui.search.ExpenseSearchTab
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.SpliitType
+import app.spliit.ui.totals.TotalsTab
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -67,13 +73,17 @@ import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.random.Random
 
-private val GroupTabs = listOf("Expenses", "Balances", "Information")
+private val GroupTabs = listOf("Expenses", "Balances", "Totals", "Information")
+
+/** Where the group screen is, when it isn't showing a tab. */
+private enum class GroupDestination { TABS, SEARCH, ACTIVITY }
 
 /**
- * A group: its expenses, its balances, and who the person holding the phone is in it.
+ * A group: its expenses, its balances, what it has spent, its notes, and who the person holding
+ * the phone is in it.
  *
- * The three tabs share one model, which is what lets an expense added on the first update the
- * second without either knowing about the other.
+ * The tabs share one model, which is what lets an expense added on the first update the others
+ * without any of them knowing about each other.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,98 +95,160 @@ fun GroupScreen(
     val scope = rememberCoroutineScope()
     val model = remember(container, groupId) { GroupScreenModel(container, groupId, scope) }
     var tabIndex by remember { mutableStateOf(0) }
+    var destination by remember { mutableStateOf(GroupDestination.TABS) }
+    var query by remember { mutableStateOf("") }
     var sheet by remember { mutableStateOf<ExpenseFormPresentation?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(model) { model.start() }
     // A delete the user has already asked for must not be lost to leaving the screen.
     DisposableEffect(model) { onDispose { model.flushPendingDeletion() } }
+    // Restarting on every keystroke cancels the run before it, which is what makes the wait
+    // inside `search` a debounce rather than a delay.
+    LaunchedEffect(query) { model.search(query) }
 
     val recentGroups by container.recentGroups.groups.collectAsState(initial = emptyList())
     val stored = recentGroups.firstOrNull { it.groupId == groupId }
     val group = model.group
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(group?.name.orEmpty()) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (tabIndex == 0 && group != null) {
-                        IconButton(onClick = { sheet = createPresentation(group, model, stored) }) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add expense")
-                        }
-                    }
-                },
+    val openExpense: (String) -> Unit = { expenseId ->
+        scope.launch {
+            val expense = model.expense(expenseId) ?: return@launch
+            sheet = ExpenseFormPresentation(
+                draft = ExpenseFormDraft.editing(expense, group ?: return@launch),
+                editing = expense,
+                mintedId = expense.id,
             )
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when {
-                group == null && model.isLoadingGroup -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+        }
+    }
 
-                group == null && model.didFailToLoad -> EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.Warning),
-                    title = "Couldn’t load the group",
-                    description = model.loadFailure,
-                ) {
-                    Button(onClick = { model.retry() }) { Text("Try again") }
-                }
+    if (destination == GroupDestination.ACTIVITY) {
+        ActivityLogScreen(
+            model = model,
+            onBack = {
+                destination = GroupDestination.TABS
+                tabIndex = GroupTabs.indexOf("Information").coerceAtLeast(0)
+            },
+            onEdit = openExpense,
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(if (destination == GroupDestination.SEARCH) "Search" else group?.name.orEmpty())
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                when (destination) {
+                                    GroupDestination.SEARCH -> {
+                                        destination = GroupDestination.TABS
+                                        query = ""
+                                    }
 
-                group != null -> Column(modifier = Modifier.fillMaxSize()) {
-                    TabRow(selectedTabIndex = tabIndex) {
-                        GroupTabs.forEachIndexed { index, title ->
-                            Tab(
-                                selected = tabIndex == index,
-                                onClick = { tabIndex = index },
-                                text = { Text(title) },
+                                    else -> onBack()
+                                }
+                            },
+                        ) {
+                            Icon(
+                                if (destination == GroupDestination.SEARCH) {
+                                    Icons.Filled.Close
+                                } else {
+                                    Icons.AutoMirrored.Filled.ArrowBack
+                                },
+                                contentDescription = if (destination == GroupDestination.SEARCH) {
+                                    "Close search"
+                                } else {
+                                    "Back"
+                                },
                             )
                         }
+                    },
+                    actions = {
+                        if (destination == GroupDestination.TABS) {
+                            IconButton(onClick = { destination = GroupDestination.SEARCH }) {
+                                Icon(Icons.Filled.Search, contentDescription = "Search expenses")
+                            }
+                            if (tabIndex == 0 && group != null) {
+                                IconButton(onClick = { sheet = createPresentation(group, model, stored) }) {
+                                    Icon(Icons.Filled.Add, contentDescription = "Add expense")
+                                }
+                            }
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                when {
+                    group == null && model.isLoadingGroup -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
                     }
 
-                    val identity = identityOf(stored, group)
-                    Box(modifier = Modifier.weight(1f)) {
-                        when (tabIndex) {
-                            0 -> ExpenseListTab(
-                                model = model,
-                                onAdd = { sheet = createPresentation(group, model, stored) },
-                                onEdit = { expenseId ->
-                                    scope.launch {
-                                        val expense = model.expense(expenseId) ?: return@launch
-                                        sheet = ExpenseFormPresentation(
-                                            draft = ExpenseFormDraft.editing(expense, group),
-                                            editing = expense,
-                                            mintedId = expense.id,
-                                        )
-                                    }
-                                },
-                            )
+                    group == null && model.didFailToLoad -> EmptyState(
+                        art = EmptyStateArt.Icon(Icons.Filled.Warning),
+                        title = "Couldn’t load the group",
+                        description = model.loadFailure,
+                    ) {
+                        Button(onClick = { model.retry() }) { Text("Try again") }
+                    }
 
-                            1 -> BalancesTab(
-                                model = model,
-                                identity = identity,
-                                identityIsNobody = stored?.activeParticipant == ActiveParticipant.Nobody,
-                                onIdentify = { pickerOpen = true },
-                                onSettle = { reimbursement ->
-                                    sheet = settlePresentation(reimbursement, group, model)
-                                },
-                            )
+                    group != null && destination == GroupDestination.SEARCH -> ExpenseSearchTab(
+                        model = model,
+                        query = query,
+                        onQueryChange = { query = it },
+                        onEdit = openExpense,
+                    )
 
-                            else -> InformationTab(
-                                group = group,
-                                model = model,
-                                stored = stored,
-                                onIdentify = { pickerOpen = true },
-                            )
+                    group != null -> Column(modifier = Modifier.fillMaxSize()) {
+                        TabRow(selectedTabIndex = tabIndex) {
+                            GroupTabs.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = tabIndex == index,
+                                    onClick = { tabIndex = index },
+                                    text = { Text(title) },
+                                )
+                            }
+                        }
+
+                        val identity = identityOf(stored, group)
+                        Box(modifier = Modifier.weight(1f)) {
+                            when (tabIndex) {
+                                0 -> ExpenseListTab(
+                                    model = model,
+                                    onAdd = { sheet = createPresentation(group, model, stored) },
+                                    onEdit = openExpense,
+                                )
+
+                                1 -> BalancesTab(
+                                    model = model,
+                                    identity = identity,
+                                    identityIsNobody = stored?.activeParticipant == ActiveParticipant.Nobody,
+                                    onIdentify = { pickerOpen = true },
+                                    onSettle = { reimbursement ->
+                                        sheet = settlePresentation(reimbursement, group, model)
+                                    },
+                                )
+
+                                2 -> TotalsTab(
+                                    model = model,
+                                    identity = identity,
+                                    identityIsNobody = stored?.activeParticipant == ActiveParticipant.Nobody,
+                                    onIdentify = { pickerOpen = true },
+                                )
+
+                                else -> InformationTab(
+                                    group = group,
+                                    model = model,
+                                    stored = stored,
+                                    onIdentify = { pickerOpen = true },
+                                    onOpenActivity = { destination = GroupDestination.ACTIVITY },
+                                )
+                            }
                         }
                     }
                 }
@@ -268,10 +340,7 @@ private fun identityOf(
         ?.let { answer -> group.participants.firstOrNull { it.id == answer.id } }
 
 /**
- * The identity a new expense starts from, and the group's own facts.
- *
- * Phase 4 brings the totals, activity and search tabs here; this is the information the app
- * already had.
+ * The identity a new expense starts from, the group's own facts, and the way to its history.
  */
 @Composable
 private fun InformationTab(
@@ -279,6 +348,7 @@ private fun InformationTab(
     model: GroupScreenModel,
     stored: RecentGroup?,
     onIdentify: () -> Unit,
+    onOpenActivity: () -> Unit,
 ) {
     val identity = identityOf(stored, group)
 
@@ -323,6 +393,35 @@ private fun InformationTab(
                 Fact("Currency", currencyLabel(group))
                 Fact("Created", dateLabel(group.createdAt))
                 model.instanceUrl?.let { Fact("Server", ServerInstance.displayName(it)) }
+            }
+        }
+
+        // The log belongs with the things this tab holds because it is something you look up
+        // rather than work in — and there is no room for a fifth tab.
+        Card {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenActivity),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    Icons.Filled.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Activity", style = SpliitType.RowTitle)
+                    Text(
+                        text = "Everything that has happened in this group, and who did it.",
+                        style = SpliitType.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 

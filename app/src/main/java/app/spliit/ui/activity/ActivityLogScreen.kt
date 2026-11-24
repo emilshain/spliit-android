@@ -1,0 +1,283 @@
+package app.spliit.ui.activity
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import app.spliit.data.model.Activity
+import app.spliit.data.model.ActivityType
+import app.spliit.ui.group.ActivitySection
+import app.spliit.ui.group.GroupScreenModel
+import app.spliit.ui.theme.DateBucketHeader
+import app.spliit.ui.theme.EmptyState
+import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.SpliitType
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
+
+/**
+ * What has happened to a group and when: expenses created, edited and deleted, and the times the
+ * group's own settings changed.
+ *
+ * The only screen that reads history rather than state, and so the only one that shows lines about
+ * things which no longer exist. A deleted expense keeps its row, under the title it had at the
+ * time, and simply has nowhere to lead — which is the whole reason to keep a log.
+ *
+ * Pushed from the information tab rather than being a tab of its own: of the group's screens this
+ * is the one you consult rather than work in.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ActivityLogScreen(
+    model: GroupScreenModel,
+    onBack: () -> Unit,
+    onEdit: (String) -> Unit,
+) {
+    LaunchedEffect(model) { model.loadActivitiesIfNeeded() }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Activity") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            val sections = model.activitySections
+
+            when {
+                model.isLoadingActivities -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+
+                model.didFailToLoad || model.didFailToLoadActivities -> EmptyState(
+                    art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
+                    title = if (model.didFailToLoad) {
+                        "Couldn’t load this group"
+                    } else {
+                        "Couldn’t load the activity"
+                    },
+                    description = model.activitiesFailure
+                        ?: model.loadFailure
+                        ?: "The server didn’t respond.",
+                ) {
+                    Button(onClick = { scope.launch { model.retryActivities() } }) {
+                        Text("Try again")
+                    }
+                }
+
+                // The sections rather than the raw list: a log made entirely of entries this
+                // version cannot describe has nothing to draw.
+                sections.isEmpty() -> EmptyState(
+                    art = EmptyStateArt.Icon(Icons.Filled.History),
+                    title = "No activity yet",
+                    description = "Adding, editing or deleting an expense is recorded here, and " +
+                        "so is a change to the group itself.",
+                )
+
+                else -> ActivityList(
+                    model = model,
+                    sections = sections,
+                    onEdit = onEdit,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ActivityList(
+    model: GroupScreenModel,
+    sections: List<ActivitySection>,
+    onEdit: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                refreshing = true
+                try {
+                    model.refreshActivities()
+                } finally {
+                    refreshing = false
+                }
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            sections.forEach { section ->
+                item(key = "header-${section.group.name}") {
+                    DateBucketHeader(section.group.title)
+                }
+                items(section.activities, key = { it.id }) { activity ->
+                    ActivityRow(
+                        activity = activity,
+                        participantName = activity.participantId?.let { model.participant(it)?.name },
+                        showsDate = section.group.needsDate,
+                        opensExpense = activity.expenseStillExists,
+                        onOpen = { activity.expenseId?.let(onEdit) },
+                    )
+                }
+            }
+
+            if (model.hasMoreActivities) {
+                item(key = "more") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    }
+                    LaunchedEffect(model.activities.size) { model.loadNextActivityPage() }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A row leads to its expense when there is still one to lead to. Rows about a deleted expense,
+ * and about the group's own settings, are text and stay text — an inert row is better than one
+ * that opens an editor for something that is gone.
+ */
+@Composable
+private fun ActivityRow(
+    activity: Activity,
+    participantName: String?,
+    showsDate: Boolean,
+    opensExpense: Boolean,
+    onOpen: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (opensExpense) Modifier.clickable(onClick = onOpen) else Modifier)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // A fixed column, so the sentences line up down the list rather than shifting with the
+        // width of each glyph.
+        Icon(
+            imageVector = symbol(activity.activityType),
+            contentDescription = null,
+            modifier = Modifier.width(16.dp).padding(top = 2.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = summary(activity, participantName),
+                style = SpliitType.RowTitle,
+            )
+            Text(
+                text = timestamp(activity.time, showsDate),
+                style = SpliitType.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The same glyphs the app uses for these actions elsewhere. */
+private fun symbol(type: ActivityType): ImageVector = when (type) {
+    ActivityType.CreateExpense -> Icons.Filled.Add
+    ActivityType.UpdateExpense -> Icons.Filled.Edit
+    ActivityType.DeleteExpense -> Icons.Filled.Delete
+    ActivityType.UpdateGroup -> Icons.Filled.Settings
+    is ActivityType.Unknown -> Icons.AutoMirrored.Filled.HelpOutline
+}
+
+/**
+ * The whole sentence.
+ *
+ * The title is the one recorded with the activity, which is the point — renaming an expense
+ * leaves the old name on the line describing its creation.
+ */
+private fun summary(activity: Activity, participantName: String?): String {
+    val who = participantName ?: "Someone"
+    val what = activity.title.orEmpty()
+    return when (activity.activityType) {
+        ActivityType.CreateExpense -> "$who added “$what”."
+        ActivityType.UpdateExpense -> "$who updated “$what”."
+        ActivityType.DeleteExpense -> "$who deleted “$what”."
+        ActivityType.UpdateGroup -> "$who changed the group settings."
+        is ActivityType.Unknown -> ""
+    }
+}
+
+/**
+ * The time, plus the date when the heading above has not already given it. Both are left to the
+ * platform, which knows how the reader's locale writes them.
+ */
+private fun timestamp(time: Instant, showsDate: Boolean): String {
+    val formatter = if (showsDate) {
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+    } else {
+        DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+    }
+    return formatter
+        .withLocale(Locale.getDefault())
+        .format(time.atZone(ZoneId.systemDefault()))
+}
+
