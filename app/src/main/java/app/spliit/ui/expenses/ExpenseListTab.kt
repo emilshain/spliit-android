@@ -75,6 +75,7 @@ fun ExpenseListTab(
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onSearch: () -> Unit,
+    searchBarMorph: Modifier = Modifier,
 ) {
     var payerFilter by remember { mutableStateOf<String?>(null) }
     val participants = model.group?.participants.orEmpty()
@@ -132,6 +133,7 @@ fun ExpenseListTab(
                                 payerFilter = payerFilter,
                                 onFilterChange = { payerFilter = it },
                                 onSearch = onSearch,
+                                searchBarMorph = searchBarMorph,
                             )
                         }
 
@@ -277,6 +279,7 @@ private fun ExpensesToolbar(
     payerFilter: String?,
     onFilterChange: (String?) -> Unit,
     onSearch: () -> Unit,
+    searchBarMorph: Modifier = Modifier,
 ) {
     val active = payerFilter != null
 
@@ -289,7 +292,9 @@ private fun ExpensesToolbar(
     ) {
         Surface(
             onClick = onSearch,
-            modifier = Modifier.weight(1f).height(46.dp),
+            // The search page's field grows out of this pill, so the transition has one bar to
+            // morph rather than two to cross-fade.
+            modifier = Modifier.weight(1f).height(46.dp).then(searchBarMorph),
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {

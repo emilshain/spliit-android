@@ -3,8 +3,12 @@ package app.spliit.ui.group
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -127,6 +131,9 @@ private val GroupTabs = listOf("Expenses", "Balances", "Totals", "Activity")
 /** Where the group screen is, when it isn't showing a tab. */
 private enum class GroupDestination { TABS, SEARCH, SETTINGS, DETAIL, SETTLEMENTS }
 
+/** The page the group screen is on, as far as the screen-to-screen transition is concerned. */
+private enum class GroupPage { MAIN, SETTINGS, DETAIL, SETTLEMENTS }
+
 /**
  * A group: its expenses, its balances, what it has spent, its notes, and who the person holding
  * the phone is in it.
@@ -134,7 +141,7 @@ private enum class GroupDestination { TABS, SEARCH, SETTINGS, DETAIL, SETTLEMENT
  * The tabs share one model, which is what lets an expense added on the first update the others
  * without any of them knowing about each other.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun GroupScreen(
     container: AppContainer,
@@ -207,7 +214,32 @@ fun GroupScreen(
         loadDetail(id)
     }
 
-    if (destination == GroupDestination.SETTINGS) {
+    // The tabs and the search page are one page here: search grows out of the search bar
+    // rather than arriving as a new screen. Settings, an expense and the settlements are pages
+    // of their own, and push in from the trailing edge the way a stack does in SwiftUI.
+    val page = when (destination) {
+        GroupDestination.SETTINGS -> GroupPage.SETTINGS
+        GroupDestination.DETAIL -> GroupPage.DETAIL
+        GroupDestination.SETTLEMENTS -> GroupPage.SETTLEMENTS
+        else -> GroupPage.MAIN
+    }
+
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            val spatial = SpliitMotion.spatialSlow<IntOffset>()
+            val forward = targetState != GroupPage.MAIN
+            if (forward) {
+                (slideInHorizontally(spatial) { it } + fadeIn(SpliitMotion.effectsDefault())) togetherWith
+                    (slideOutHorizontally(spatial) { -it / 4 } + fadeOut(SpliitMotion.effectsFast()))
+            } else {
+                (slideInHorizontally(spatial) { -it / 4 } + fadeIn(SpliitMotion.effectsDefault())) togetherWith
+                    (slideOutHorizontally(spatial) { it } + fadeOut(SpliitMotion.effectsFast()))
+            }
+        },
+        label = "group page",
+    ) { page ->
+    if (page == GroupPage.SETTINGS) {
         SettingsScreen(
             group = group,
             model = model,
@@ -216,7 +248,7 @@ fun GroupScreen(
             onIdentify = { pickerOpen = true },
             onDeleteGroup = { confirmDeleteGroup = true },
         )
-    } else if (destination == GroupDestination.DETAIL) {
+    } else if (page == GroupPage.DETAIL) {
         ExpenseDetailScreen(
             expense = detail,
             isLoading = isLoadingDetail,
@@ -244,7 +276,7 @@ fun GroupScreen(
                 destination = GroupDestination.TABS
             },
         )
-    } else if (destination == GroupDestination.SETTLEMENTS) {
+    } else if (page == GroupPage.SETTLEMENTS) {
         SettlementsScreen(
             model = model,
             identity = identity,
@@ -340,30 +372,40 @@ fun GroupScreen(
                         Button(onClick = { model.retry() }) { Text("Try again") }
                     }
 
-                    // Search is a destination of its own rather than a page of the tab row, so it
-                    // arrives like one: from the right, over the tabs, and leaves the same way.
-                    group != null -> AnimatedContent(
-                        targetState = destination,
-                        transitionSpec = {
-                            val forward = targetState == GroupDestination.SEARCH
-                            val spec = SpliitMotion.spatialSlow<IntOffset>()
-                            (slideInHorizontally(spec) { width ->
-                                if (forward) width / 3 else -width / 3
-                            } + fadeIn(SpliitMotion.effectsDefault())) togetherWith
-                                (slideOutHorizontally(spec) { width ->
-                                    if (forward) -width / 3 else width / 3
-                                } + fadeOut(SpliitMotion.effectsFast()))
-                        },
-                        label = "group destination",
-                    ) { target ->
-                        if (target == GroupDestination.SEARCH) {
-                            ExpenseSearchTab(
-                                model = model,
-                                query = query,
-                                onQueryChange = { query = it },
-                                onEdit = openDetail,
-                            )
-                        } else {
+                    // Search is the same page as the tabs, with the bar grown into a field.
+                    group != null -> SharedTransitionLayout {
+                        AnimatedContent(
+                            targetState = destination,
+                            transitionSpec = {
+                                (
+                                    fadeIn(SpliitMotion.spatialDefault()) +
+                                        scaleIn(SpliitMotion.spatialDefault(), initialScale = 0.98f)
+                                    ) togetherWith
+                                    fadeOut(SpliitMotion.effectsFast())
+                            },
+                            label = "group destination",
+                        ) { target ->
+                            // Both AnimatedContents here are the same scope type, so take this
+                            // one's before stepping into the shared-transition scope below.
+                            val visibility = this
+                            val morph = with(this@SharedTransitionLayout) {
+                                Modifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState("group-search"),
+                                    animatedVisibilityScope = visibility,
+                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                                    enter = fadeIn(SpliitMotion.effectsDefault()),
+                                    exit = fadeOut(SpliitMotion.effectsFast()),
+                                )
+                            }
+                            if (target == GroupDestination.SEARCH) {
+                                ExpenseSearchTab(
+                                    model = model,
+                                    query = query,
+                                    onQueryChange = { query = it },
+                                    onEdit = openDetail,
+                                    fieldMorph = morph,
+                                )
+                            } else {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 // The pages run under the tab bar: a list that stops at the bar
                                 // looks cut off rather than scrolled.
@@ -390,6 +432,7 @@ fun GroupScreen(
                                     when (page) {
                                         0 -> ExpenseListTab(
                                             model = model,
+                                            searchBarMorph = morph,
                                             onAdd = {
                                                 sheet = createPresentation(group, model, stored)
                                             },
@@ -431,6 +474,8 @@ fun GroupScreen(
                                         )
                                     }
                                 }
+                            }
+                        }
                             }
                         }
                     }

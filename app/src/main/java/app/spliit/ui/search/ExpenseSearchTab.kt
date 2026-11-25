@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WifiOff
@@ -20,17 +19,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.ExpenseListItem
 import app.spliit.domain.ExpenseSearchMatch
@@ -41,6 +34,7 @@ import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.SearchPill
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SpliitType
 
@@ -59,38 +53,25 @@ fun ExpenseSearchTab(
     query: String,
     onQueryChange: (String) -> Unit,
     onEdit: (String) -> Unit,
+    fieldMorph: Modifier = Modifier,
 ) {
-    val focusRequester = remember { FocusRequester() }
-    // Opening search should put the caret in the field.
-    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-
     val trimmed = query.trim()
 
     // The keyboard is up for as long as this screen is: the empty state and the results have to
     // sit above it rather than behind it.
     Box(modifier = Modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
+            // The same pill as the one on the expenses tab, so the page's bar is that bar
+            // grown rather than a second one arriving.
+            SearchPill(
+                query = query,
+                onQueryChange = onQueryChange,
+                placeholder = "Search expenses",
+                requestFocus = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .focusRequester(focusRequester),
-                placeholder = { Text("Search expenses") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    imeAction = ImeAction.Search,
-                ),
+                    .then(fieldMorph),
             )
 
             // Driven by what is in the field, not by what the model has searched for: the two

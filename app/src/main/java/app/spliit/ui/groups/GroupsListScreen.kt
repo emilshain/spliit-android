@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,8 +28,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
@@ -65,18 +62,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
@@ -92,6 +83,7 @@ import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SearchPill
 import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
@@ -176,9 +168,11 @@ fun GroupsListScreen(
                     exit = shrinkVertically(SpliitMotion.spatialFast()) +
                         fadeOut(SpliitMotion.effectsFast()),
                 ) {
-                    GroupSearchField(
+                    SearchPill(
                         query = query,
                         onQueryChange = { query = it },
+                        placeholder = "Search groups",
+                        requestFocus = true,
                         modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
                     )
                 }
@@ -477,80 +471,6 @@ private fun GroupsList(
 
         // Room for the last card to clear the add button.
         item(key = "bottom") { Spacer(Modifier.padding(bottom = 96.dp)) }
-    }
-}
-
-/**
- * The search field, an editable twin of the expenses list's search pill: same height, same
- * rounded tonal surface, with a clear button once there is anything to clear. It takes focus as
- * soon as it appears, because tapping the button was the request to type.
- */
-@Composable
-private fun GroupSearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val focusRequester = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-        keyboard?.show()
-    }
-
-    Surface(
-        modifier = modifier.fillMaxWidth().height(48.dp),
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
-                ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                decorationBox = { field ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (query.isEmpty()) {
-                            Text(
-                                text = "Search groups",
-                                style = SpliitType.Secondary,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        field()
-                    }
-                },
-            )
-            if (query.isNotEmpty()) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Clear search",
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(50))
-                        .clickable { onQueryChange("") }
-                        .padding(7.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
     }
 }
 
