@@ -46,6 +46,7 @@ class ExpenseFormDraftTest {
     private fun draft(
         amount: String = "30.00",
         split: SplitMode = SplitMode.EVENLY,
+        tax: String = "",
         participants: List<ParticipantShare> = group.participants.map {
             ParticipantShare(it.id, it.name, isIncluded = true)
         },
@@ -55,6 +56,7 @@ class ExpenseFormDraftTest {
         amountText = amount,
         paidById = "p1",
         splitMode = split,
+        taxText = tax,
         participants = participants,
         locale = locale,
         minorUnitDigits = 2,
@@ -447,6 +449,64 @@ class ExpenseFormDraftTest {
 
         assertEquals(SplitMode.BY_AMOUNT, remembered.splitMode)
         assertNull(remembered.shares)
+    }
+
+    // MARK: - Tax, split equally
+
+    private fun amountsDraft(tax: String) = draft(
+        amount = "20.00",
+        split = SplitMode.BY_AMOUNT,
+        tax = tax,
+        participants = listOf(
+            ParticipantShare("p1", "Ana", isIncluded = true, valueText = "10"),
+            ParticipantShare("p2", "Bruno", isIncluded = true, valueText = "10"),
+        ),
+    )
+
+    @Test
+    fun `a tax grows the total and is shared equally`() {
+        val balanced = amountsDraft(tax = "4").rebalanced()
+
+        assertEquals("24.00", balanced.amountText)
+        assertEquals(2400, balanced.amountMinorUnits)
+        val paidFor = balanced.formValues!!.paidFor.associate { it.participant to it.shares }
+        assertEquals(mapOf("p1" to 1200, "p2" to 1200), paidFor)
+    }
+
+    @Test
+    fun `a tax that cannot be divided evenly still adds up to the total`() {
+        val balanced = amountsDraft(tax = "0.01").rebalanced()
+
+        assertEquals("20.01", balanced.amountText)
+        val paidFor = balanced.formValues!!.paidFor.associate { it.participant to it.shares }
+        // One leftover minor unit, handed to the first participant: nobody is left holding it.
+        assertEquals(mapOf("p1" to 1001, "p2" to 1000), paidFor)
+        assertEquals(2001, paidFor.values.sum())
+    }
+
+    @Test
+    fun `no tax leaves the amounts exactly as they were typed`() {
+        val untouched = amountsDraft(tax = "")
+
+        assertFalse(untouched.taxApplies)
+        assertEquals(untouched, untouched.rebalanced())
+        assertEquals("20.00", untouched.amountText)
+    }
+
+    @Test
+    fun `a tax that is not a number is refused`() {
+        val broken = amountsDraft(tax = "abc")
+
+        assertTrue(broken.problems.contains(ExpenseFormDraft.Problem.TaxNotANumber))
+        assertFalse(broken.isValid)
+    }
+
+    @Test
+    fun `a tax only exists where amounts are typed`() {
+        val even = draft(split = SplitMode.EVENLY, tax = "4")
+
+        assertFalse(even.taxApplies)
+        assertEquals("30.00", even.rebalanced().amountText)
     }
 
     @Test

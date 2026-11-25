@@ -1,40 +1,41 @@
 package app.spliit.ui.expenses
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,9 +48,12 @@ import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.ExpressiveMenu
+import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
+import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
 import java.util.Locale
 import kotlin.math.abs
@@ -97,7 +101,6 @@ fun ExpenseListTab(
             model.expenses.isEmpty() -> EmptyState(
                 art = EmptyStateArt.Icon(Icons.AutoMirrored.Filled.List),
                 title = "No expenses yet",
-                description = "Add the first expense and Spliit will work out who owes what.",
             ) {
                 Button(onClick = onAdd) { Text("Add expense") }
             }
@@ -194,12 +197,13 @@ fun ExpenseListTab(
                                 items = section.expenses,
                                 key = { _, expense -> expense.id },
                             ) { _, expense ->
-                                SwipeableExpense(
-                                    onDelete = { model.requestDelete(expense) },
-                                    onClick = { onEdit(expense.id) },
-                                    // The row that was swiped leaves by sliding, and undo puts it
-                                    // back where it was rather than at the top of the list.
-                                    modifier = Modifier.animateItem(),
+                                // Opening is the whole gesture here: deleting lives on the
+                                // expense itself, so the row is free to belong to the pager.
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateItem()
+                                        .clickable { onEdit(expense.id) },
                                 ) {
                                     ExpenseRow(
                                         expense = expense,
@@ -230,19 +234,20 @@ fun ExpenseListTab(
             }
         }
 
-        Surface(
+        val addInteraction = remember { MutableInteractionSource() }
+
+        FloatingActionButton(
             onClick = onAdd,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 20.dp, bottom = 24.dp)
-                .size(56.dp),
+                .pressScale(addInteraction),
+            interactionSource = addInteraction,
             shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 6.dp,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Add, contentDescription = "Add expense")
-            }
+            Icon(Icons.Filled.Add, contentDescription = "Add expense")
         }
 
         ExpenseUndoBar(
@@ -337,17 +342,23 @@ private fun ExpensesToolbar(
                 }
             }
 
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                DropdownMenuItem(
-                    text = { Text("Anyone") },
+            ExpressiveMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                minWidth = 208.dp,
+            ) {
+                ExpressiveMenuItem(
+                    text = "Anyone",
+                    selected = payerFilter == null,
                     onClick = {
                         open = false
                         onFilterChange(null)
                     },
                 )
                 participants.forEach { participant ->
-                    DropdownMenuItem(
-                        text = { Text("Paid by ${participant.name}") },
+                    ExpressiveMenuItem(
+                        text = "Paid by ${participant.name}",
+                        selected = payerFilter == participant.id,
                         onClick = {
                             open = false
                             onFilterChange(participant.id)

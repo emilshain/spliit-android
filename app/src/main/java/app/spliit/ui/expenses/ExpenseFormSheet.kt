@@ -4,23 +4,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -28,14 +25,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,13 +53,16 @@ import app.spliit.data.remote.SpliitApi
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.ParticipantShare
+import app.spliit.ui.theme.ExpandChevron
+import app.spliit.ui.theme.ExpressiveMenu
+import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
 import app.spliit.ui.theme.SpliitType
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /**
  * Creating and editing an expense — who paid, how much, and how it's divided.
@@ -240,16 +240,19 @@ fun ExpenseFormSheet(
                                 ?: "Choose",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Icon(
-                            Icons.Filled.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        ExpandChevron(
+                                expanded = payerMenuOpen,
+                            )
                     }
-                    DropdownMenu(expanded = payerMenuOpen, onDismissRequest = { payerMenuOpen = false }) {
+                    ExpressiveMenu(
+                        expanded = payerMenuOpen,
+                        onDismissRequest = { payerMenuOpen = false },
+                        minWidth = 220.dp,
+                    ) {
                         group.participants.forEach { participant ->
-                            DropdownMenuItem(
-                                text = { Text(participant.name) },
+                            ExpressiveMenuItem(
+                                text = participant.name,
+                                selected = participant.id == draft.paidById,
                                 onClick = {
                                     payerMenuOpen = false
                                     draft = draft.copy(paidById = participant.id)
@@ -276,19 +279,19 @@ fun ExpenseFormSheet(
                                     ?: "General",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Icon(
-                                Icons.Filled.ExpandMore,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            ExpandChevron(
+                                    expanded = categoryMenuOpen,
+                                )
                         }
-                        DropdownMenu(
+                        ExpressiveMenu(
                             expanded = categoryMenuOpen,
                             onDismissRequest = { categoryMenuOpen = false },
+                            minWidth = 240.dp,
                         ) {
                             categories.forEach { category ->
-                                DropdownMenuItem(
-                                    text = { Text("${category.grouping} · ${category.name}") },
+                                ExpressiveMenuItem(
+                                    text = "${category.grouping} · ${category.name}",
+                                    selected = category.id == draft.categoryId,
                                     onClick = {
                                         categoryMenuOpen = false
                                         draft = draft.copy(categoryId = category.id)
@@ -346,14 +349,14 @@ fun ExpenseFormSheet(
                                 participants = draft.participants.map {
                                     if (it.id == participant.id) it.copy(isIncluded = included) else it
                                 },
-                            )
+                            ).rebalanced()
                         },
                         onChangeValue = { value ->
                             draft = draft.copy(
                                 participants = draft.participants.map {
                                     if (it.id == participant.id) it.copy(valueText = value) else it
                                 },
-                            )
+                            ).rebalanced()
                         },
                     )
                     if (hasAttemptedSave) {
@@ -361,6 +364,29 @@ fun ExpenseFormSheet(
                             FieldError(it.message)
                         }
                     }
+                }
+
+                // Splitting by amount is the one mode where a total is typed by hand and then
+                // divided up, which is exactly the shape of a bill with tax on it. The tax is
+                // added to the total and shared equally, so what is sent is still one BY_AMOUNT
+                // expense whose shares add up to its amount.
+                if (draft.splitMode == SplitMode.BY_AMOUNT) {
+                    OutlinedTextField(
+                        value = draft.taxText,
+                        onValueChange = { draft = draft.copy(taxText = it).rebalanced() },
+                        label = { Text("Tax, split equally") },
+                        placeholder = { Text("0.00") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        suffix = { Text(groupFormatter(group).currencySymbol) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    problemText(
+                        draft,
+                        hasAttemptedSave,
+                        ExpenseFormDraft.Problem.TaxNotANumber,
+                        ExpenseFormDraft.Problem.TaxNegative,
+                    )
                 }
 
                 if (draft.isSplitWorthRemembering) {

@@ -41,6 +41,15 @@ data class ExpenseFormDraft(
     val categoryId: Int = 0,
     val paidById: String? = null,
     val splitMode: SplitMode = SplitMode.EVENLY,
+    /**
+     * An amount added on top of the typed amounts and shared equally, available in
+     * [SplitMode.BY_AMOUNT] — the one mode where nobody can see where a total came from.
+     *
+     * It is never sent anywhere: the total grows by it and each participant's share grows by
+     * their part of it, so the expense the server receives is an ordinary BY_AMOUNT expense whose
+     * shares add up to its amount. Nothing about the stored format changes.
+     */
+    val taxText: String = "",
     val participants: List<ParticipantShare> = emptyList(),
     /**
      * Whether this split should become the one the group's next expense starts from.
@@ -190,10 +199,74 @@ data class ExpenseFormDraft(
             MoneyFormatter.minorUnits(participant.valueText, locale, minorUnitDigits)
     }
 
+    // MARK: - Tax, split equally
+
+    /** The tax as typed, in minor units; null when it isn't a number. */
+    val taxMinorUnits: Int?
+        get() = when {
+            splitMode != SplitMode.BY_AMOUNT -> null
+            taxText.isBlank() -> 0
+            else -> MoneyFormatter.minorUnits(taxText, locale, minorUnitDigits)
+        }
+
+    /** Whether a tax is being used at all. Blank means the form behaves exactly as before. */
+    val taxApplies: Boolean
+        get() = splitMode == SplitMode.BY_AMOUNT && taxText.isNotBlank()
+
+    /** What the typed participant amounts come to, before any tax. */
+    private val typedAmountsTotal: Int
+        get() = includedParticipants.sumOf { shareValue(it) ?: 0 }
+
+    /**
+     * The tax each included participant carries: equal parts, with the leftover minor units
+     * handed to the first of them.
+     *
+     * Equal parts and an exact sum, both: the remainder can't be left out (the shares must still
+     * add up to the total) and it can't be held by nobody (there is no such column on the server).
+     */
+    private val taxShareByParticipant: Map<String, Int>
+        get() {
+            val tax = taxMinorUnits ?: return emptyMap()
+            val included = includedParticipants
+            if (!taxApplies || tax <= 0 || included.isEmpty()) return emptyMap()
+
+            val each = tax / included.size
+            val remainder = tax % included.size
+            return included.mapIndexed { index, participant ->
+                participant.id to each + if (index < remainder) 1 else 0
+            }.toMap()
+        }
+
+    /**
+     * What the server should be told this participant pays: their typed amount plus their equal
+     * part of the tax. Identical to [shareValue] when no tax is in play.
+     */
+    fun payableShareValue(participant: ParticipantShare): Int? =
+        shareValue(participant)?.let { it + (taxShareByParticipant[participant.id] ?: 0) }
+
+    /**
+     * Moves the total to what the typed amounts plus the tax come to.
+     *
+     * Called as the amounts are edited, so the total field can't drift away from what the shares
+     * will add up to. A draft with no tax is returned untouched, which is what keeps the form
+     * behaving as it always has for everyone who does not use this.
+     */
+    fun rebalanced(): ExpenseFormDraft {
+        if (!taxApplies) return this
+        val tax = taxMinorUnits ?: return this
+        return copy(
+            amountText = text(
+                value = typedAmountsTotal + tax,
+                locale = locale,
+                minorUnitDigits = minorUnitDigits,
+            ),
+        )
+    }
+
     /** For BY_AMOUNT, how far the shares are from the total; for BY_PERCENTAGE, from 100%. */
     val unallocated: Int?
         get() {
-            val allocated = includedParticipants.sumOf { shareValue(it) ?: 0 }
+            val allocated = includedParticipants.sumOf { payableShareValue(it) ?: 0 }
             return when (splitMode) {
                 SplitMode.BY_AMOUNT -> amountMinorUnits?.let { it - allocated }
                 SplitMode.BY_PERCENTAGE -> PERCENT_SCALE - allocated
@@ -215,7 +288,7 @@ data class ExpenseFormDraft(
         val rows = includedParticipants.map { participant ->
             object : ExpenseShareRow {
                 override val participantId: String = participant.id
-                override val shares: Int = shareValue(participant) ?: 0
+                override val shares: Int = payableShareValue(participant) ?: 0
             }
         }
         return ExpenseShares.shares(
@@ -259,6 +332,10 @@ data class ExpenseFormDraft(
         data class ShareNotANumber(val participantId: String) : Problem
         data class ShareNotPositive(val participantId: String) : Problem
 
+        /** The tax field in a BY_AMOUNT split: blank is fine, a number is fine, nonsense is not. */
+        data object TaxNotANumber : Problem
+        data object TaxNegative : Problem
+
         /** Shares must add up to the expense total. [difference] is what's left to allocate. */
         data class AmountsDoNotSumToTotal(val difference: Int) : Problem
 
@@ -284,6 +361,8 @@ data class ExpenseFormDraft(
                 NoParticipantsSelected -> "The expense must be paid for at least one participant."
                 is ShareNotANumber -> "Invalid number."
                 is ShareNotPositive -> "All shares must be higher than 0."
+                TaxNotANumber -> "Invalid number."
+                TaxNegative -> "The tax must not be negative."
                 is AmountsDoNotSumToTotal -> "Sum of amounts must equal the expense amount."
                 is PercentagesDoNotSumTo100 -> "Sum of percentages must equal 100."
             }
@@ -320,6 +399,15 @@ data class ExpenseFormDraft(
 
             val included = includedParticipants
             if (included.isEmpty()) problems += Problem.NoParticipantsSelected
+
+            if (taxApplies && taxText.isNotBlank()) {
+                val tax = taxMinorUnits
+                if (tax == null) {
+                    problems += Problem.TaxNotANumber
+                } else if (tax < 0) {
+                    problems += Problem.TaxNegative
+                }
+            }
 
             if (splitMode != SplitMode.EVENLY) {
                 for (participant in included) {
@@ -406,7 +494,9 @@ data class ExpenseFormDraft(
             val paidBy = paidById ?: return null
 
             val paidFor = includedParticipants.mapNotNull { participant ->
-                val shares = shareValue(participant) ?: return@mapNotNull null
+                // Includes this participant's part of the tax: the server sees amounts that
+                // add up to the total, and nothing that says a tax was involved.
+                val shares = payableShareValue(participant) ?: return@mapNotNull null
                 ExpenseFormValues.PaidFor(participant = participant.id, shares = shares)
             }
             val trimmedNotes = notes.trim()

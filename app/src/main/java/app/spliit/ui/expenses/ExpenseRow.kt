@@ -5,11 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
@@ -24,22 +22,21 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.ExpenseListItem
-import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseBalance
 import app.spliit.domain.MoneyFormatter
 import app.spliit.ui.theme.CategoryIcons
 import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.Money
-import app.spliit.ui.theme.MoneySign
-import app.spliit.ui.theme.MoneySize
 import app.spliit.ui.theme.ParticipantDot
 import app.spliit.ui.theme.SpliitType
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
+import kotlin.math.abs
 
 /**
  * One expense, as it appears in a list of them.
+ *
+ * The card leads with what the expense was and what it cost, and only then with what it does to
+ * the reader: the direction they stand in, over the amount that direction is worth. The day it
+ * happened is the list's heading rather than the row's, so nothing here repeats it.
  *
  * Shared by the expenses tab and by search results, so a matched expense reads exactly as it does
  * in the list it came from — same columns, same money treatment, same category glyph.
@@ -52,6 +49,9 @@ fun ExpenseRow(
     activeParticipantId: String?,
     modifier: Modifier = Modifier,
 ) {
+    val balance = activeParticipantId?.let { ExpenseBalance.of(it, expense) }
+    val reading = balance?.takeIf { it != 0 }?.let { ExpenseBalance.reading(it, expense) }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -59,61 +59,68 @@ fun ExpenseRow(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CategoryGlyph(expense)
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = expense.title,
-                style = SpliitType.RowTitle,
-                fontStyle = if (expense.isReimbursement) FontStyle.Italic else FontStyle.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            CategoryGlyph(expense)
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                // Who paid, in the colour they have on the balances screen.
-                ParticipantDot(position = payerPosition, size = 7.dp)
-                PaidByLine(expense, formatter, activeParticipantId)
-            }
-        }
-
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Money(
-                value = formatter.string(expense.amount),
-                sign = MoneySign.of(expense.amount),
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (expense.documentCount > 0) {
-                    Icon(
-                        Icons.Filled.AttachFile,
-                        contentDescription = "${expense.documentCount} documents attached",
-                        modifier = Modifier.size(12.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
                 Text(
-                    text = dateLabel(expense),
-                    style = SpliitType.Secondary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = expense.title,
+                    style = SpliitType.RowTitle,
+                    fontStyle = if (expense.isReimbursement) FontStyle.Italic else FontStyle.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+
+                // The whole expense, and who put it in: the figure the group is splitting, as
+                // opposed to the reader's own part on the right.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ParticipantDot(position = payerPosition, size = 7.dp)
+                    Text(
+                        text = "${expense.paidBy.name} paid ${formatter.string(expense.amount)}",
+                        style = SpliitType.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (expense.documentCount > 0) {
+                        Icon(
+                            Icons.Filled.AttachFile,
+                            contentDescription = "${expense.documentCount} documents attached",
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            if (reading != null && balance != null) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = readingLabel(reading),
+                        style = SpliitType.Secondary,
+                        color = if (balance > 0) {
+                            LocalSpliitColors.current.moneyPositive
+                        } else {
+                            LocalSpliitColors.current.moneyNegative
+                        },
+                    )
+                    Money(value = formatter.string(abs(balance)))
+                }
             }
         }
-    }
     }
 }
 
@@ -137,74 +144,12 @@ private fun CategoryGlyph(expense: ExpenseListItem) {
     }
 }
 
-/**
- * Who paid, and — once the user has said who they are — what the expense does to their balance.
- *
- * The balance takes the place of the "for …" names rather than a line of its own, so a row keeps
- * its height.
- */
-@Composable
-private fun PaidByLine(
-    expense: ExpenseListItem,
-    formatter: MoneyFormatter,
-    activeParticipantId: String?,
-) {
-    val names = expense.paidFor.joinToString(", ") { it.participant.name }
-    val you = activeParticipantId
-
-    if (you != null) {
-        val balance = ExpenseBalance.of(you, expense)
-        if (balance == null) {
-            Text(
-                text = "Not involved",
-                style = SpliitType.Secondary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            return
-        }
-        if (balance != 0) {
-            BalanceSentence(balance, expense, formatter)
-            return
-        }
-    }
-
-    Text(
-        text = "Paid by ${expense.paidBy.name} for $names",
-        style = SpliitType.Secondary,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
+/** What the row says above the reader's share of the expense. */
+private fun readingLabel(reading: ExpenseBalance.Reading): String = when (reading) {
+    ExpenseBalance.Reading.LENT -> "You lent"
+    ExpenseBalance.Reading.BORROWED -> "You borrowed"
+    ExpenseBalance.Reading.PAID_BACK -> "You paid back"
+    ExpenseBalance.Reading.WAS_PAID_BACK -> "You were paid back"
+    ExpenseBalance.Reading.IS_OWED -> "You are owed"
+    ExpenseBalance.Reading.OWES -> "You owe"
 }
-
-/** "You lent €10.00", tinted like a balance because it has a direction. */
-@Composable
-private fun BalanceSentence(balance: Int, expense: ExpenseListItem, formatter: MoneyFormatter) {
-    val reading = ExpenseBalance.reading(balance, expense)
-    val amount = formatter.string(kotlin.math.abs(balance))
-    val sentence = when (reading) {
-        ExpenseBalance.Reading.LENT -> "You lent $amount"
-        ExpenseBalance.Reading.BORROWED -> "You borrowed $amount"
-        ExpenseBalance.Reading.PAID_BACK -> "You paid back $amount"
-        ExpenseBalance.Reading.WAS_PAID_BACK -> "You were paid back $amount"
-        ExpenseBalance.Reading.IS_OWED -> "You are owed $amount"
-        ExpenseBalance.Reading.OWES -> "You owe $amount"
-    }
-
-    Text(
-        text = "$sentence · ${expense.paidBy.name} paid",
-        style = SpliitType.Secondary,
-        color = if (balance > 0) {
-            LocalSpliitColors.current.moneyPositive
-        } else {
-            LocalSpliitColors.current.moneyNegative
-        },
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-private fun dateLabel(expense: ExpenseListItem): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-        .withLocale(Locale.getDefault())
-        .format(CalendarDay.dayOf(expense.expenseDate))
