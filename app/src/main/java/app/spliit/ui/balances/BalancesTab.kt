@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -115,7 +116,7 @@ private fun BalancesContent(
     onOpenSettlements: () -> Unit,
 ) {
     val largest = maxOf(model.balances.values.maxOfOrNull { abs(it.total) } ?: 0, 1)
-    var suggestedOpen by remember { mutableStateOf(true) }
+    var suggestedOpen by remember { mutableStateOf(false) }
 
     LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -132,20 +133,15 @@ private fun BalancesContent(
             )
         }
         item(key = "balances-header") { SectionHeader("Balances") }
-        items(group.participants, key = { it.id }) { participant ->
-            BalanceCard(
-                participant = participant,
-                position = group.participants.indexOfFirst { it.id == participant.id },
-                balance = model.balances[participant.id] ?: Balance(0, 0, 0),
+        item(key = "balances-card") {
+            BalancesCard(
+                participants = group.participants,
+                balances = model.balances,
                 largest = largest,
-                isYou = identity?.id == participant.id,
+                identityId = identity?.id,
                 formatter = model.moneyFormatter,
             )
         }
-        item(key = "balances-footer") {
-            SectionFooter("Who is up and who is down, once every expense has been counted.")
-        }
-
         item(key = "settle-header") {
             SuggestedHeader(
                 expanded = suggestedOpen,
@@ -265,15 +261,15 @@ private fun YouCard(
 }
 
 /**
- * A diverging bar: owed to the right of centre, owing to the left. One card per person.
+ * Everyone's balance, in one card: a row per person, split by hairlines, so the set reads as a
+ * single ledger rather than a pile of separate cards.
  */
 @Composable
-private fun BalanceCard(
-    participant: Participant,
-    position: Int,
-    balance: Balance,
+private fun BalancesCard(
+    participants: List<Participant>,
+    balances: Map<String, Balance>,
     largest: Int,
-    isYou: Boolean,
+    identityId: String?,
     formatter: app.spliit.domain.MoneyFormatter,
 ) {
     Surface(
@@ -283,42 +279,75 @@ private fun BalanceCard(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Monogram(name = participant.name, colorIndex = position, size = 26.dp)
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = participant.name, style = SpliitType.RowTitle)
-                    if (isYou) {
-                        Spacer(Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                        ) {
-                            Text(
-                                text = "You",
-                                style = SpliitType.Secondary,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Money(
-                        value = formatter.string(balance.total),
-                        sign = MoneySign.of(balance.total),
+        Column {
+            participants.forEachIndexed { index, participant ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 50.dp, end = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
                 }
-
-                DivergingBar(fraction = abs(balance.total).toFloat() / largest, total = balance.total)
+                BalanceRow(
+                    participant = participant,
+                    position = index,
+                    balance = balances[participant.id] ?: Balance(0, 0, 0),
+                    largest = largest,
+                    isYou = identityId == participant.id,
+                    formatter = formatter,
+                )
             }
+        }
+    }
+}
+
+/**
+ * One person's line in the balances card: a diverging bar, owed to the right of centre and owing
+ * to the left.
+ */
+@Composable
+private fun BalanceRow(
+    participant: Participant,
+    position: Int,
+    balance: Balance,
+    largest: Int,
+    isYou: Boolean,
+    formatter: app.spliit.domain.MoneyFormatter,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Monogram(name = participant.name, colorIndex = position, size = 26.dp)
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = participant.name, style = SpliitType.RowTitle)
+                if (isYou) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        Text(
+                            text = "You",
+                            style = SpliitType.Secondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Money(
+                    value = formatter.string(balance.total),
+                    sign = MoneySign.of(balance.total),
+                )
+            }
+
+            DivergingBar(fraction = abs(balance.total).toFloat() / largest, total = balance.total)
         }
     }
 }
@@ -454,12 +483,3 @@ private fun SectionHeader(text: String) {
     )
 }
 
-@Composable
-private fun SectionFooter(text: String) {
-    Text(
-        text = text,
-        style = SpliitType.Secondary,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-    )
-}

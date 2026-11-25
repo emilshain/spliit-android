@@ -70,6 +70,15 @@ object SpliitPalette {
         onSurface = Color(0xFF1C1C1E),
         surfaceVariant = Color(0xFFEFEFF4),
         onSurfaceVariant = Color(0xFF6C6C70),
+        surfaceContainerLowest = Color(0xFFFFFFFF),
+        surfaceContainerLow = Color(0xFFFFFFFF),
+        surfaceContainer = Color(0xFFF7F7FA),
+        surfaceContainerHigh = Color(0xFFEFEFF4),
+        surfaceContainerHighest = Color(0xFFE8E8EE),
+        secondaryContainer = Color(0xFFD1FAE5),
+        onSecondaryContainer = Color(0xFF064E3B),
+        outlineVariant = Color(0xFFE3E3E9),
+        surfaceTint = AccentLight,
         error = MoneyNegativeLight,
     )
 
@@ -82,6 +91,15 @@ object SpliitPalette {
         onSurface = Color(0xFFF2F2F7),
         surfaceVariant = Color(0xFF2C2C2E),
         onSurfaceVariant = Color(0xFFAEAEB2),
+        surfaceContainerLowest = Color(0xFF0A0A0B),
+        surfaceContainerLow = Color(0xFF232326),
+        surfaceContainer = Color(0xFF1C1C1E),
+        surfaceContainerHigh = Color(0xFF2C2C2E),
+        surfaceContainerHighest = Color(0xFF35353A),
+        secondaryContainer = Color(0xFF0B3B2E),
+        onSecondaryContainer = Color(0xFFA7F3D0),
+        outlineVariant = Color(0xFF3A3A3F),
+        surfaceTint = AccentDark,
         error = MoneyNegativeDark,
     )
 

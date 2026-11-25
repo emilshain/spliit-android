@@ -61,14 +61,6 @@ fun ActiveUserPickerSheet(
                 )
             }
 
-            Text(
-                text = "This stays on this phone. Spliit has no accounts, so nobody else in " +
-                    "the group can see which participant you picked.",
-                style = SpliitType.Secondary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             Row(
@@ -93,13 +85,6 @@ fun ActiveUserPickerSheet(
                     )
                 }
             }
-
-            Text(
-                text = "Pick nobody on a phone the whole group shares.",
-                style = SpliitType.Secondary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
 
             TextButton(
                 onClick = onDismiss,

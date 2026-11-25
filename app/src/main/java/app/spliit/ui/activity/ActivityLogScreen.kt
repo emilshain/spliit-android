@@ -110,8 +110,6 @@ fun ActivityTab(
                 sections.isEmpty() -> EmptyState(
                     art = EmptyStateArt.Icon(Icons.Filled.History),
                     title = "No activity yet",
-                    description = "Adding, editing or deleting an expense is recorded here, and " +
-                        "so is a change to the group itself.",
                 )
 
                 else -> ActivityList(

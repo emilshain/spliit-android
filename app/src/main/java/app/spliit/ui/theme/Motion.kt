@@ -4,10 +4,19 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.material3.Shapes
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Shapes
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.pow
 
 /**
  * How this app moves.
@@ -63,6 +72,51 @@ object SpliitMotion {
     const val SHORT_MILLIS = 150
     const val MEDIUM_MILLIS = 250
     const val LONG_MILLIS = 400
+
+    // SwiftUI's spring presets.
+    //
+    // SwiftUI names its springs by feel — `.snappy`, `.bouncy`, `.smooth` — and each is a
+    // response-and-damping pair rather than a stiffness. A response is the period of the
+    // undamped spring in seconds, which for a unit mass is k = (2π / response)²; damping is the
+    // ratio SwiftUI exposes directly. Expressing the presets that way keeps the numbers here
+    // readable next to a SwiftUI view, and lets a spec be ported by copying its two numbers.
+
+    /** SwiftUI's `.snappy`: quick, a hair of overshoot at most. Menus and presses. */
+    fun <T> snappy(): FiniteAnimationSpec<T> = swiftSpring(response = 0.5f, dampingRatio = 0.85f)
+
+    /** SwiftUI's `.bouncy`: slower, visibly elastic. For things that should feel thrown. */
+    fun <T> bouncy(): FiniteAnimationSpec<T> = swiftSpring(response = 0.55f, dampingRatio = 0.7f)
+
+    /** SwiftUI's `.smooth`: no overshoot. Fades and anything that must not wobble. */
+    fun <T> smooth(): FiniteAnimationSpec<T> = swiftSpring(response = 0.5f, dampingRatio = 1f)
+
+    /** A spring written the way SwiftUI writes one: `.spring(response: 0.4, dampingFraction: 0.8)`. */
+    fun <T> swiftSpring(response: Float, dampingRatio: Float): FiniteAnimationSpec<T> {
+        val stiffness = (2.0 * PI / response).pow(2.0).toFloat()
+        return spring(dampingRatio = dampingRatio, stiffness = stiffness)
+    }
+}
+
+/**
+ * SwiftUI's `.scaleEffect(isPressed ? 0.96 : 1)` on a `.snappy` animation, which Compose has no
+ * button style for. Keeping the press on a spring means releasing halfway still springs back
+ * smoothly instead of snapping to a keyframe.
+ */
+@Composable
+fun Modifier.pressScale(
+    interactionSource: InteractionSource,
+    pressedScale: Float = 0.96f,
+): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = SpliitMotion.snappy(),
+        label = "press scale",
+    )
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
 }
 
 /**

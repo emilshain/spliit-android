@@ -94,8 +94,7 @@ fun SettlementsScreen(
                 identity == null -> EmptyState(
                     art = EmptyStateArt.Icon(Icons.Filled.CheckCircle),
                     title = "Say who you are",
-                    description = "Pick your name on the balances tab and this page shows the " +
-                        "payments that settle you up.",
+                    description = "Pick your name on the balances tab.",
                 )
 
                 mine.isEmpty() -> EmptyState(

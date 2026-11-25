@@ -73,6 +73,8 @@ class BalancesTabTest {
         }
 
         compose.onNodeWithText("You owe").assertIsDisplayed()
+        // The payments start folded away; open them to read the suggestion.
+        compose.onNodeWithText("Suggested payments").performClick()
         // The hero amount and the suggested payment are the same €25.00.
         compose.waitUntil(TIMEOUT) {
             compose.onAllNodesWithText("€25.00").fetchSemanticsNodes().size >= 2

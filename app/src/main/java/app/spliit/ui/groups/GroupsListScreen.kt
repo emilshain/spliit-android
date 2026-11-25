@@ -1,21 +1,24 @@
 package app.spliit.ui.groups
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
@@ -23,36 +26,33 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.Stable
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
@@ -62,21 +62,25 @@ import app.spliit.data.remote.SpliitApi
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.ExpressiveMenu
+import app.spliit.ui.theme.ExpressiveMenuItem
+import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
+import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
  * The home screen: the groups this device remembers, with participant counts and dates fetched
@@ -99,13 +103,18 @@ fun GroupsListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
-                // The app's own name, once: the list below is plainly the groups, and a heading
-                // saying so would be a label on the obvious.
-                title = { Text("Spliit", style = SpliitType.Title) },
+            // The app's own name, once: the list below is plainly the groups, and a heading
+            // saying so would be a label on the obvious. A plain headline rather than an app
+            // bar: there is no navigation or action up here, and the bar's fixed 64dp box left
+            // the title floating in a band of empty space. Sized to the text, it sits on the
+            // system inset and the list starts straight under it.
+            Text(
+                text = "Spliit",
+                style = SpliitType.Title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 10.dp),
             )
         },
         floatingActionButton = {
@@ -120,8 +129,6 @@ fun GroupsListScreen(
                 EmptyState(
                     art = EmptyStateArt.Logo,
                     title = "Welcome to Spliit",
-                    description = "Create a group to start splitting expenses with friends, " +
-                        "or add one that was shared with you.",
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -165,7 +172,7 @@ fun GroupsListScreen(
                 container = container,
                 defaultInstanceUrl = defaultInstance,
                 onDismiss = { sheet = GroupsSheet.None },
-                onCreated = { group ->
+                onSaved = { group ->
                     sheet = GroupsSheet.None
                     onOpenGroup(group.groupId)
                 },
@@ -192,9 +199,16 @@ private enum class GroupsSheet { None, Create, AddByLink }
 private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
     Box {
         var open by remember { mutableStateOf(false) }
+        val fabInteraction = remember { MutableInteractionSource() }
 
         FloatingActionButton(
             onClick = { open = true },
+            interactionSource = fabInteraction,
+            // Off the Scaffold's own 16dp corner by the same 4dp/8dp the expense list's add
+            // button sits in from its edges, so the two land in the same place on screen.
+            modifier = Modifier
+                .padding(end = 4.dp, bottom = 8.dp)
+                .pressScale(fabInteraction),
             shape = RoundedCornerShape(18.dp),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -202,18 +216,23 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
             Icon(Icons.Filled.Add, contentDescription = "Add group")
         }
 
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Create group") },
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+        ExpressiveMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            placement = MenuPlacement.Above,
+            minWidth = 200.dp,
+        ) {
+            ExpressiveMenuItem(
+                text = "Create group",
+                leadingIcon = Icons.Filled.Add,
                 onClick = {
                     open = false
                     onCreate()
                 },
             )
-            DropdownMenuItem(
-                text = { Text("Add by link") },
-                leadingIcon = { Icon(Icons.Filled.Link, contentDescription = null) },
+            ExpressiveMenuItem(
+                text = "Add by link",
+                leadingIcon = Icons.Filled.Link,
                 onClick = {
                     open = false
                     onAddByLink()
@@ -425,26 +444,31 @@ private fun GroupRow(
                 }
             }
 
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(if (group.isStarred) "Unstar" else "Star") },
-                    leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null) },
+            ExpressiveMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                minWidth = 200.dp,
+            ) {
+                ExpressiveMenuItem(
+                    text = if (group.isStarred) "Unstar" else "Star",
+                    leadingIcon = Icons.Filled.Star,
                     onClick = {
                         menuOpen = false
                         onStar()
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text(if (group.isArchived) "Unarchive" else "Archive") },
-                    leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
+                ExpressiveMenuItem(
+                    text = if (group.isArchived) "Unarchive" else "Archive",
+                    leadingIcon = Icons.Filled.Archive,
                     onClick = {
                         menuOpen = false
                         onArchive()
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text("Remove") },
-                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                ExpressiveMenuItem(
+                    text = "Remove",
+                    leadingIcon = Icons.Filled.Delete,
+                    destructive = true,
                     onClick = {
                         menuOpen = false
                         onRemove()

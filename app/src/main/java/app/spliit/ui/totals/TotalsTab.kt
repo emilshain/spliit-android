@@ -89,7 +89,7 @@ fun TotalsTab(
         model.statsUnavailable -> EmptyState(
             art = EmptyStateArt.Icon(Icons.Filled.BarChart),
             title = "No totals on this server",
-            description = "This Spliit instance doesn’t offer them. Everything else in the group works as usual.",
+            description = "This Spliit instance doesn’t offer them.",
         )
 
         model.stats == null && (model.isLoadingGroup || !model.didFailToLoadStats) -> Box(
@@ -177,10 +177,6 @@ private fun TotalsContent(
                         formatter = model.moneyFormatter,
                     )
                 }
-                SectionFooter(
-                    "Settling up is not spending, so reimbursements are left out of every " +
-                        "figure here.",
-                )
             }
 
             item(key = "you") {
@@ -208,24 +204,9 @@ private fun TotalsContent(
                                 fraction = groupSlice(share, stats.totalGroupSpendings),
                             )
                         }
-                        if (identity == null) {
-                            Text(
-                                text = "Say who you are and this card also says what you have " +
-                                    "paid, and what your share of the group came to.",
-                                style = SpliitType.Secondary,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                         IdentityRow(identity, identityIsNobody, onIdentify)
                     }
                 }
-                SectionFooter(
-                    if (identity == null) {
-                        "Pick yourself from the card above; the totals are already here."
-                    } else {
-                        "What you paid, against what was spent on you. The difference is your balance."
-                    },
-                )
             }
 
             if (model.categorySpendingReconciles) {
@@ -240,12 +221,6 @@ private fun TotalsContent(
                             )
                         }
                     }
-                }
-                item(key = "categories-footer") {
-                    SectionFooter(
-                        "Every bar on this screen is a slice of the same total, so the lengths " +
-                            "compare straight down the page.",
-                    )
                 }
             } else if (model.isLoadingCategorySpending) {
                 // A placeholder rather than nothing: this sweep reads every expense in the group,
@@ -450,15 +425,5 @@ private fun SectionHeader(text: String) {
         style = SpliitType.SectionHeader,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
-private fun SectionFooter(text: String) {
-    Text(
-        text = text,
-        style = SpliitType.Secondary,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
     )
 }
