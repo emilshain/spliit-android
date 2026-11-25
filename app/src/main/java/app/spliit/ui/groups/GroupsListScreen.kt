@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,17 +19,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -93,6 +90,7 @@ import java.util.Locale
 fun GroupsListScreen(
     container: AppContainer,
     onOpenGroup: (String) -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val model = remember(container) { GroupsListModel(container, scope) }
@@ -103,46 +101,20 @@ fun GroupsListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    // No title on the welcome screen: it already names the app in its heading,
-                    // and "Groups" over an empty screen labels a list that isn't there.
-                    if (model.groups.isNotEmpty()) {
-                        Column {
-                            Text("Groups", style = SpliitType.Title)
-                            Text(
-                                text = groupCountLabel(model.groups.count { !it.isArchived }),
-                                style = SpliitType.Secondary,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                },
+                // The app's own name, once: the list below is plainly the groups, and a heading
+                // saying so would be a label on the obvious.
+                title = { Text("Spliit", style = SpliitType.Title) },
                 actions = {
-                    Box {
-                        var menuOpen by remember { mutableStateOf(false) }
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "Add group")
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Create group") },
-                                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    sheet = GroupsSheet.Create
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Add by link") },
-                                leadingIcon = { Icon(Icons.Filled.Link, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    sheet = GroupsSheet.AddByLink
-                                },
-                            )
-                        }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
+            )
+        },
+        floatingActionButton = {
+            AddGroupButton(
+                onCreate = { sheet = GroupsSheet.Create },
+                onAddByLink = { sheet = GroupsSheet.AddByLink },
             )
         },
     ) { padding ->
@@ -212,6 +184,47 @@ fun GroupsListScreen(
 }
 
 private enum class GroupsSheet { None, Create, AddByLink }
+
+/**
+ * The one way in to a new group, at the bottom right where an add belongs.
+ *
+ * It opens onto the two kinds of adding — making one, or pasting a link to one — because the
+ * difference is a decision, not something to hide behind a guess.
+ */
+@Composable
+private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
+    Box {
+        var open by remember { mutableStateOf(false) }
+
+        FloatingActionButton(
+            onClick = { open = true },
+            shape = RoundedCornerShape(18.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "Add group")
+        }
+
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Create group") },
+                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onCreate()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Add by link") },
+                leadingIcon = { Icon(Icons.Filled.Link, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onAddByLink()
+                },
+            )
+        }
+    }
+}
 
 @Composable
 private fun GroupsList(model: GroupsListModel, onOpenGroup: (String) -> Unit) {
@@ -287,6 +300,9 @@ private fun GroupsList(model: GroupsListModel, onOpenGroup: (String) -> Unit) {
                 )
             }
         }
+
+        // Room for the last card to clear the add button.
+        item(key = "bottom") { Spacer(Modifier.padding(bottom = 96.dp)) }
     }
 }
 
@@ -447,9 +463,6 @@ private fun metaLine(summary: GroupSummary?): String {
     if (summary == null) return "…"
     return listOf(dateLabel(summary.createdAt), participantText(summary)).joinToString(" · ")
 }
-
-private fun groupCountLabel(count: Int): String =
-    if (count == 1) "1 group" else "$count groups"
 
 /**
  * Localised, and pluralised here only because the app has no translation yet: the count of a

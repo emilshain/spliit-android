@@ -19,10 +19,9 @@ import app.spliit.data.remote.SpliitApi
 import app.spliit.data.remote.TrpcClient
 import app.spliit.data.remote.TrpcServerException
 import app.spliit.data.remote.groupStats
-import app.spliit.domain.ActivityDateGroup
 import app.spliit.domain.CalendarDay
+import app.spliit.domain.DateHeading
 import app.spliit.domain.CategorySpending
-import app.spliit.domain.ExpenseDateGroup
 import app.spliit.domain.MoneyFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +31,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Everything one group's screens need, loaded once and shared by the tabs, so adding an expense
@@ -482,13 +483,13 @@ class GroupScreenModel(
             // An activity of a kind this version does not know is dropped rather than drawn:
             // there is no honest sentence to put on the row.
             val describable = activities.filter { it.activityType.isRecognised }
-            val buckets = LinkedHashMap<ActivityDateGroup, MutableList<Activity>>()
+            val days = LinkedHashMap<LocalDate, MutableList<Activity>>()
             for (activity in describable) {
-                buckets.getOrPut(ActivityDateGroup.containing(activity.time)) { mutableListOf() } +=
-                    activity
+                val day = activity.time.atZone(ZoneId.systemDefault()).toLocalDate()
+                days.getOrPut(day) { mutableListOf() } += activity
             }
-            return buckets.entries
-                .sortedBy { it.key }
+            return days.entries
+                .sortedByDescending { it.key }
                 .map { ActivitySection(it.key, it.value) }
         }
 
@@ -812,13 +813,13 @@ class GroupScreenModel(
     }
 
     private fun sectionsOf(items: List<ExpenseListItem>): List<ExpenseSection> {
-        val buckets = LinkedHashMap<ExpenseDateGroup, MutableList<ExpenseListItem>>()
+        val days = LinkedHashMap<LocalDate, MutableList<ExpenseListItem>>()
         for (expense in items) {
-            val bucket = ExpenseDateGroup.containing(CalendarDay.dayOf(expense.expenseDate))
-            buckets.getOrPut(bucket) { mutableListOf() } += expense
+            val day = CalendarDay.dayOf(expense.expenseDate)
+            days.getOrPut(day) { mutableListOf() } += expense
         }
-        return buckets.entries
-            .sortedBy { it.key }
+        return days.entries
+            .sortedByDescending { it.key }
             .map { ExpenseSection(it.key, it.value) }
     }
 
@@ -833,14 +834,19 @@ class GroupScreenModel(
     }
 }
 
-/** One date bucket and the expenses in it, in the order the server sent them. */
+/** One day's expenses, in the order the server sent them. */
 data class ExpenseSection(
-    val group: ExpenseDateGroup,
+    val date: LocalDate,
     val expenses: List<ExpenseListItem>,
-)
+) {
+    /** "NOV 25, 2026 WED". */
+    val title: String get() = DateHeading.of(date)
+}
 
-/** One bucket of the activity log and the entries in it, newest first. */
+/** One day of the activity log, newest first. */
 data class ActivitySection(
-    val group: ActivityDateGroup,
+    val date: LocalDate,
     val activities: List<Activity>,
-)
+) {
+    val title: String get() = DateHeading.of(date)
+}

@@ -10,10 +10,12 @@ import androidx.navigation.navArgument
 import app.spliit.AppContainer
 import app.spliit.ui.group.GroupScreen
 import app.spliit.ui.groups.GroupsListScreen
+import app.spliit.ui.settings.SettingsScreen
 import app.spliit.ui.theme.SpliitTheme
 
 private const val GROUPS = "groups"
 private const val GROUP_DETAIL = "group/{groupId}"
+private const val SETTINGS = "settings"
 
 @Composable
 fun SpliitApp(container: AppContainer) {
@@ -29,6 +31,7 @@ fun SpliitApp(container: AppContainer) {
                         // expansion of the row.
                         navController.navigate("group/${Uri.encode(groupId)}")
                     },
+                    onOpenSettings = { navController.navigate(SETTINGS) },
                 )
             }
 
@@ -39,6 +42,13 @@ fun SpliitApp(container: AppContainer) {
                 GroupScreen(
                     container = container,
                     groupId = entry.arguments?.getString("groupId").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(SETTINGS) {
+                SettingsScreen(
+                    container = container,
                     onBack = { navController.popBackStack() },
                 )
             }

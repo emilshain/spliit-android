@@ -1,8 +1,5 @@
 package app.spliit.ui.expenses
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,11 +16,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,10 +33,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import app.spliit.data.model.Participant
+import app.spliit.ui.group.ExpenseSection
 import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
@@ -48,12 +54,12 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * A group's expenses, newest first, grouped into the same date buckets the old app used so an
- * upgrading user sees a familiar list.
+ * A group's expenses, newest first, under the day each one happened.
  *
  * The screen opens on the answer most people came for — what this group leaves them owed or
- * owing — and the list follows it. Adding is a button over the list rather than a toolbar action,
- * because it belongs to the expenses rather than to the screen.
+ * owing — and the list follows it, behind one long search field and a filter for whose expenses
+ * to show. Adding is a button over the list rather than a toolbar action, because it belongs to
+ * the expenses rather than to the screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +69,9 @@ fun ExpenseListTab(
     onEdit: (String) -> Unit,
     onSearch: () -> Unit,
 ) {
+    var payerFilter by remember { mutableStateOf<String?>(null) }
+    val participants = model.group?.participants.orEmpty()
+
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             model.isLoadingExpenses -> Box(
@@ -92,83 +101,120 @@ fun ExpenseListTab(
                 Button(onClick = onAdd) { Text("Add expense") }
             }
 
-            else -> PullToRefreshBox(
-                // A pull reloads the first page and everything that counts it; paging is the
-                // footer's job and must not be what the spinner reports.
-                isRefreshing = model.isRefreshing,
-                onRefresh = { model.refresh() },
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    item(key = "summary") { BalanceSummaryCard(model = model) }
+            else -> {
+                val sections = filtered(model.sections, payerFilter)
+                val filterName = participants.firstOrNull { it.id == payerFilter }?.name
 
-                    item(key = "expenses-header") {
-                        ExpensesSectionHeader(onSearch = onSearch)
-                    }
+                PullToRefreshBox(
+                    // A pull reloads the first page and everything that counts it; paging is the
+                    // footer's job and must not be what the spinner reports.
+                    isRefreshing = model.isRefreshing,
+                    onRefresh = { model.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        item(key = "summary") { BalanceSummaryCard(model = model) }
 
-                    model.expensesFailure?.let { failure ->
-                        item(key = "failure") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Filled.Warning,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(2.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                        item(key = "search") {
+                            ExpensesToolbar(
+                                participants = participants,
+                                payerFilter = payerFilter,
+                                onFilterChange = { payerFilter = it },
+                                onSearch = onSearch,
+                            )
+                        }
+
+                        if (filterName != null) {
+                            item(key = "filter-caption") {
                                 Text(
-                                    text = failure,
+                                    text = "Showing only what $filterName paid for",
                                     style = SpliitType.Secondary,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(
+                                        start = 20.dp,
+                                        end = 20.dp,
+                                        top = 4.dp,
+                                        bottom = 2.dp,
+                                    ),
                                 )
                             }
                         }
-                    }
 
-                    model.sections.forEach { section ->
-                        item(key = "header-${section.group.name}") {
-                            DateBucketHeader(section.group.title)
+                        model.expensesFailure?.let { failure ->
+                            item(key = "failure") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Warning,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(2.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = failure,
+                                        style = SpliitType.Secondary,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                         }
-                        itemsIndexed(
-                            items = section.expenses,
-                            key = { _, expense -> expense.id },
-                        ) { _, expense ->
-                            SwipeableExpense(
-                                onDelete = { model.requestDelete(expense) },
-                                onClick = { onEdit(expense.id) },
-                                // The row that was swiped leaves by sliding, and undo puts it
-                                // back where it was rather than at the top of the list.
-                                modifier = Modifier.animateItem(),
-                            ) {
-                                ExpenseRow(
-                                    expense = expense,
-                                    payerPosition = model.participantPosition(expense.paidBy.id),
-                                    formatter = model.moneyFormatter,
-                                    activeParticipantId = model.actorId,
+
+                        if (sections.isEmpty() && filterName != null) {
+                            item(key = "no-filter-results") {
+                                Text(
+                                    text = "Nothing here was paid by $filterName.",
+                                    style = SpliitType.Secondary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                                 )
                             }
                         }
-                    }
 
-                    if (model.hasMoreExpenses) {
-                        item(key = "more") {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        sections.forEach { section ->
+                            item(key = "header-${section.date}") {
+                                DateBucketHeader(section.title)
                             }
-                            // The footer being composed is the request for the next page.
-                            LaunchedEffect(model.expenses.size) { model.loadNextPage() }
+                            itemsIndexed(
+                                items = section.expenses,
+                                key = { _, expense -> expense.id },
+                            ) { _, expense ->
+                                SwipeableExpense(
+                                    onDelete = { model.requestDelete(expense) },
+                                    onClick = { onEdit(expense.id) },
+                                    // The row that was swiped leaves by sliding, and undo puts it
+                                    // back where it was rather than at the top of the list.
+                                    modifier = Modifier.animateItem(),
+                                ) {
+                                    ExpenseRow(
+                                        expense = expense,
+                                        payerPosition = model.participantPosition(expense.paidBy.id),
+                                        formatter = model.moneyFormatter,
+                                        activeParticipantId = model.actorId,
+                                    )
+                                }
+                            }
                         }
-                    }
 
-                    item(key = "bottom") { Spacer(Modifier.padding(bottom = 88.dp)) }
+                        if (model.hasMoreExpenses) {
+                            item(key = "more") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                }
+                                // The footer being composed is the request for the next page.
+                                LaunchedEffect(model.expenses.size) { model.loadNextPage() }
+                            }
+                        }
+
+                        item(key = "bottom") { Spacer(Modifier.padding(bottom = 88.dp)) }
+                    }
                 }
             }
         }
@@ -192,6 +238,113 @@ fun ExpenseListTab(
             model = model,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+    }
+}
+
+/** The list cut down to one person's expenses, in the order the list already had. */
+private fun filtered(sections: List<ExpenseSection>, payerId: String?): List<ExpenseSection> {
+    if (payerId == null) return sections
+    return sections
+        .map { section ->
+            section.copy(expenses = section.expenses.filter { it.paidBy.id == payerId })
+        }
+        .filter { it.expenses.isNotEmpty() }
+}
+
+/**
+ * A search field that is a doorway, and the filter for whose expenses are shown.
+ *
+ * The field itself is not editable here: tapping it opens the search screen, where the keyboard,
+ * the results and the list that is being searched all have room. The button beside it narrows
+ * the list on the spot, by whoever paid.
+ */
+@Composable
+private fun ExpensesToolbar(
+    participants: List<Participant>,
+    payerFilter: String?,
+    onFilterChange: (String?) -> Unit,
+    onSearch: () -> Unit,
+) {
+    val active = payerFilter != null
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            onClick = onSearch,
+            modifier = Modifier.weight(1f).height(46.dp),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "Search expenses",
+                    style = SpliitType.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Box {
+            var open by remember { mutableStateOf(false) }
+
+            Surface(
+                onClick = { open = true },
+                modifier = Modifier.size(46.dp),
+                shape = RoundedCornerShape(50),
+                color = if (active) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Filled.FilterList,
+                        contentDescription = "Filter expenses",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (active) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(
+                    text = { Text("Anyone") },
+                    onClick = {
+                        open = false
+                        onFilterChange(null)
+                    },
+                )
+                participants.forEach { participant ->
+                    DropdownMenuItem(
+                        text = { Text("Paid by ${participant.name}") },
+                        onClick = {
+                            open = false
+                            onFilterChange(participant.id)
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -274,38 +427,6 @@ private fun BalanceSummaryCard(model: GroupScreenModel) {
                     }
                 }
             }
-        }
-    }
-}
-
-/** "Expenses", and the way into searching them. */
-@Composable
-private fun ExpensesSectionHeader(onSearch: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Expenses",
-            style = SpliitType.RowTitle,
-            modifier = Modifier.weight(1f),
-        )
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                .clickable(onClick = onSearch),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.Search,
-                contentDescription = "Search expenses",
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

@@ -140,8 +140,8 @@ private fun Results(
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         model.searchSections.forEach { section ->
-            item(key = "header-${section.group.name}") {
-                DateBucketHeader(section.group.title)
+            item(key = "header-${section.date}") {
+                DateBucketHeader(section.title)
             }
             items(section.expenses, key = { it.id }) { expense ->
                 SwipeableExpense(

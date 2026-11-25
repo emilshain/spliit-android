@@ -18,6 +18,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,6 +31,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -48,6 +55,9 @@ import kotlin.math.abs
 
 /**
  * Who is up and who is down, and the shortest set of payments that settles it.
+ *
+ * One card per person and one per payment, opening on the reader's own balance: that is the
+ * figure they came for, and it leads to the page that says who it is with.
  */
 @Composable
 fun BalancesTab(
@@ -56,6 +66,7 @@ fun BalancesTab(
     identityIsNobody: Boolean,
     onIdentify: () -> Unit,
     onSettle: (Reimbursement) -> Unit,
+    onOpenSettlements: () -> Unit,
 ) {
     val group = model.group
 
@@ -88,6 +99,7 @@ fun BalancesTab(
             identityIsNobody = identityIsNobody,
             onIdentify = onIdentify,
             onSettle = onSettle,
+            onOpenSettlements = onOpenSettlements,
         )
     }
 }
@@ -100,17 +112,24 @@ private fun BalancesContent(
     identityIsNobody: Boolean,
     onIdentify: () -> Unit,
     onSettle: (Reimbursement) -> Unit,
+    onOpenSettlements: () -> Unit,
 ) {
     val largest = maxOf(model.balances.values.maxOfOrNull { abs(it.total) } ?: 0, 1)
+    var suggestedOpen by remember { mutableStateOf(true) }
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item(key = "you-header") {
-            SectionHeader("You")
-            if (identity != null) {
-                YouSummary(model.balances[identity.id] ?: Balance(0, 0, 0), model)
-            }
-            IdentityRow(identity, identityIsNobody, onIdentify)
-            if (identity == null) {
+        item(key = "you-header") { SectionHeader("You") }
+        item(key = "you-card") {
+            YouCard(
+                balance = identity?.let { model.balances[it.id] } ?: Balance(0, 0, 0),
+                hasIdentity = identity != null,
+                model = model,
+                onClick = if (identity != null) onOpenSettlements else onIdentify,
+            )
+        }
+        item(key = "identity") { IdentityRow(identity, identityIsNobody, onIdentify) }
+        if (identity == null) {
+            item(key = "identity-footer") {
                 SectionFooter(
                     "Pick yourself once and this group is read from where you stand: your own " +
                         "balance first, and your name already filled in on a new expense.",
@@ -120,7 +139,7 @@ private fun BalancesContent(
 
         item(key = "balances-header") { SectionHeader("Balances") }
         items(group.participants, key = { it.id }) { participant ->
-            BalanceRow(
+            BalanceCard(
                 participant = participant,
                 position = group.participants.indexOfFirst { it.id == participant.id },
                 balance = model.balances[participant.id] ?: Balance(0, 0, 0),
@@ -133,19 +152,29 @@ private fun BalancesContent(
             SectionFooter("Who is up and who is down, once every expense has been counted.")
         }
 
-        item(key = "settle-header") { SectionHeader("Suggested payments") }
-        if (model.reimbursements.isEmpty()) {
-            item(key = "settled") {
-                Text(
-                    text = "Everyone is settled up.",
-                    style = SpliitType.Secondary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                )
-            }
-        } else {
-            reimbursementItems(model, group, onSettle)
+        item(key = "settle-header") {
+            SuggestedHeader(
+                expanded = suggestedOpen,
+                remaining = model.reimbursements.size,
+                onToggle = { suggestedOpen = !suggestedOpen },
+            )
         }
+        if (suggestedOpen) {
+            if (model.reimbursements.isEmpty()) {
+                item(key = "settled") {
+                    Text(
+                        text = "Everyone is settled up.",
+                        style = SpliitType.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    )
+                }
+            } else {
+                reimbursementItems(model, group, onSettle)
+            }
+        }
+
+        item(key = "bottom") { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -156,7 +185,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.reimbursementItems(
     onSettle: (Reimbursement) -> Unit,
 ) {
     items(model.reimbursements) { reimbursement ->
-        ReimbursementRow(
+        ReimbursementCard(
             reimbursement = reimbursement,
             from = model.participant(reimbursement.from),
             fromPosition = model.participantPosition(reimbursement.from),
@@ -168,30 +197,76 @@ private fun androidx.compose.foundation.lazy.LazyListScope.reimbursementItems(
     }
 }
 
+/**
+ * The reader's own balance, and the way into the payments that would settle it.
+ *
+ * The chevron is the promise the card makes: there is a page behind it, one payment per card,
+ * which is where acting on this number actually happens.
+ */
 @Composable
-private fun YouSummary(balance: Balance, model: GroupScreenModel) {
+private fun YouCard(
+    balance: Balance,
+    hasIdentity: Boolean,
+    model: GroupScreenModel,
+    onClick: () -> Unit,
+) {
     val direction = when {
+        !hasIdentity -> "Your balance"
         balance.total > 0 -> "You are owed"
         balance.total < 0 -> "You owe"
         else -> "You’re settled up"
     }
 
-    Column(
+    Surface(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        Text(
-            text = direction,
-            style = SpliitType.Secondary,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Money(
-            value = model.moneyFormatter.string(abs(balance.total)),
-            size = MoneySize.HERO,
-            sign = MoneySign.of(balance.total),
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = direction,
+                    style = SpliitType.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (hasIdentity) {
+                    Money(
+                        value = model.moneyFormatter.string(abs(balance.total)),
+                        size = MoneySize.HERO,
+                        sign = MoneySign.of(balance.total),
+                    )
+                    Text(
+                        text = if (balance.total == 0) {
+                            "Nothing left to settle"
+                        } else {
+                            "See your settlements"
+                        },
+                        style = SpliitType.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        text = "Say who you are to see it",
+                        style = SpliitType.RowTitle,
+                    )
+                }
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "My settlements",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -200,10 +275,10 @@ private fun IdentityRow(identity: Participant?, identityIsNobody: Boolean, onIde
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 20.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("You", style = SpliitType.RowTitle)
+        Text("You are", style = SpliitType.Secondary, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onIdentify) {
             Text(
@@ -218,10 +293,10 @@ private fun IdentityRow(identity: Participant?, identityIsNobody: Boolean, onIde
 }
 
 /**
- * A diverging bar: owed to the right of centre, owing to the left.
+ * A diverging bar: owed to the right of centre, owing to the left. One card per person.
  */
 @Composable
-private fun BalanceRow(
+private fun BalanceCard(
     participant: Participant,
     position: Int,
     balance: Balance,
@@ -229,43 +304,49 @@ private fun BalanceRow(
     isYou: Boolean,
     formatter: app.spliit.domain.MoneyFormatter,
 ) {
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Top,
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        Monogram(name = participant.name, colorIndex = position, size = 26.dp)
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = participant.name, style = SpliitType.RowTitle)
-                if (isYou) {
-                    Spacer(Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                    ) {
-                        Text(
-                            text = "You",
-                            style = SpliitType.Secondary,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                Money(
-                    value = formatter.string(balance.total),
-                    sign = MoneySign.of(balance.total),
-                )
-            }
+            Monogram(name = participant.name, colorIndex = position, size = 26.dp)
 
-            DivergingBar(fraction = abs(balance.total).toFloat() / largest, total = balance.total)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = participant.name, style = SpliitType.RowTitle)
+                    if (isYou) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Text(
+                                text = "You",
+                                style = SpliitType.Secondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Money(
+                        value = formatter.string(balance.total),
+                        sign = MoneySign.of(balance.total),
+                    )
+                }
+
+                DivergingBar(fraction = abs(balance.total).toFloat() / largest, total = balance.total)
+            }
         }
     }
 }
@@ -300,8 +381,55 @@ private fun DivergingBar(fraction: Float, total: Int) {
     }
 }
 
+/** "Suggested payments", and the whole section folded into it. */
 @Composable
-private fun ReimbursementRow(
+private fun SuggestedHeader(expanded: Boolean, remaining: Int, onToggle: () -> Unit) {
+    Surface(
+        onClick = onToggle,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Suggested payments", style = SpliitType.RowTitle)
+                Text(
+                    text = if (remaining == 0) {
+                        "Nothing left to pay"
+                    } else if (remaining == 1) {
+                        "1 payment would settle everyone"
+                    } else {
+                        "$remaining payments would settle everyone"
+                    },
+                    style = SpliitType.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.Filled.KeyboardArrowUp
+                } else {
+                    Icons.Filled.KeyboardArrowDown
+                },
+                contentDescription = if (expanded) {
+                    "Collapse suggested payments"
+                } else {
+                    "Expand suggested payments"
+                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReimbursementCard(
     reimbursement: Reimbursement,
     from: Participant?,
     fromPosition: Int,
@@ -310,31 +438,37 @@ private fun ReimbursementRow(
     amount: String,
     onSettle: () -> Unit,
 ) {
-    Column(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Monogram(name = from?.name.orEmpty(), colorIndex = fromPosition, size = 24.dp)
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.padding(horizontal = 4.dp).size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Monogram(name = to?.name.orEmpty(), colorIndex = toPosition, size = 24.dp)
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Monogram(name = from?.name.orEmpty(), colorIndex = fromPosition, size = 24.dp)
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.padding(horizontal = 4.dp).size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Monogram(name = to?.name.orEmpty(), colorIndex = toPosition, size = 24.dp)
 
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = "${from?.name ?: "—"} owes ${to?.name ?: "—"}",
-                modifier = Modifier.weight(1f),
-            )
-            Money(value = amount, size = MoneySize.LEAD)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "${from?.name ?: "—"} owes ${to?.name ?: "—"}",
+                    modifier = Modifier.weight(1f),
+                )
+                Money(value = amount, size = MoneySize.LEAD)
+            }
+
+            OutlinedButton(onClick = onSettle) { Text("Mark as paid") }
         }
-
-        OutlinedButton(onClick = onSettle) { Text("Mark as paid") }
     }
 }
 

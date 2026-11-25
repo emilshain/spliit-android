@@ -6,16 +6,23 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,8 +42,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +55,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -69,6 +75,7 @@ import app.spliit.ui.expenses.ExpenseFormSheet
 import app.spliit.ui.expenses.ExpenseListTab
 import app.spliit.ui.groups.ActiveUserPickerSheet
 import app.spliit.ui.search.ExpenseSearchTab
+import app.spliit.ui.settlements.SettlementsScreen
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.Monogram
@@ -87,7 +94,7 @@ import kotlin.random.Random
 private val GroupTabs = listOf("Expenses", "Balances", "Totals", "Information")
 
 /** Where the group screen is, when it isn't showing a tab. */
-private enum class GroupDestination { TABS, SEARCH, ACTIVITY, DETAIL }
+private enum class GroupDestination { TABS, SEARCH, ACTIVITY, DETAIL, SETTLEMENTS }
 
 /**
  * A group: its expenses, its balances, what it has spent, its notes, and who the person holding
@@ -125,6 +132,8 @@ fun GroupScreen(
     val recentGroups by container.recentGroups.groups.collectAsState(initial = emptyList())
     val stored = recentGroups.firstOrNull { it.groupId == groupId }
     val group = model.group
+    // Who the person holding the phone is. The screens that read one side of the ledger need it.
+    val identity = group?.let { identityOf(stored, it) }
 
     val openExpense: (String) -> Unit = { expenseId ->
         scope.launch {
@@ -190,6 +199,16 @@ fun GroupScreen(
                         mintedId = editing.id,
                     )
                 }
+            },
+        )
+    } else if (destination == GroupDestination.SETTLEMENTS) {
+        SettlementsScreen(
+            model = model,
+            identity = identity,
+            onBack = { destination = GroupDestination.TABS },
+            onSettle = { reimbursement ->
+                val current = group
+                if (current != null) sheet = settlePresentation(reimbursement, current, model)
             },
         )
     } else {
@@ -290,27 +309,11 @@ fun GroupScreen(
                             )
                         } else {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                TabRow(selectedTabIndex = tabIndex) {
-                                    GroupTabs.forEachIndexed { index, title ->
-                                        Tab(
-                                            selected = tabIndex == index,
-                                            onClick = { tabIndex = index },
-                                            // Four labels on one row: "Information" has to fit a
-                                            // quarter of the width without breaking, so it is set a
-                                            // size down.
-                                            text = {
-                                                Text(
-                                                    text = title,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    maxLines = 1,
-                                                    softWrap = false,
-                                                )
-                                            },
-                                        )
-                                    }
-                                }
+                                GroupPillTabs(
+                                    selected = tabIndex,
+                                    onSelect = { tabIndex = it },
+                                )
 
-                                val identity = identityOf(stored, group)
                                 Box(modifier = Modifier.weight(1f)) {
                                     // Only the page moves: the tab row above it has already
                                     // answered the finger, and sliding it too would read as the
@@ -349,6 +352,9 @@ fun GroupScreen(
                                                 identityIsNobody = stored?.activeParticipant ==
                                                     ActiveParticipant.Nobody,
                                                 onIdentify = { pickerOpen = true },
+                                                onOpenSettlements = {
+                                                    destination = GroupDestination.SETTLEMENTS
+                                                },
                                                 onSettle = { reimbursement ->
                                                     sheet = settlePresentation(
                                                         reimbursement,
@@ -421,6 +427,65 @@ fun GroupScreen(
             },
             onDismiss = { pickerOpen = false },
         )
+    }
+}
+
+/**
+ * The tabs as one pill, with the selection riding inside it.
+ *
+ * A stock TabRow draws the selection as an underline, which reads as "page". A pill in a track
+ * reads as "choice", and the change of page is something the thumb sees before the content lands.
+ */
+@Composable
+private fun GroupPillTabs(selected: Int, onSelect: (Int) -> Unit) {
+    val position by animateFloatAsState(
+        targetValue = selected.toFloat(),
+        animationSpec = SpliitMotion.spatialDefault(),
+        label = "tab pill",
+    )
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(44.dp)) {
+            val itemWidth = maxWidth / GroupTabs.size
+            Box(
+                modifier = Modifier
+                    .offset(x = itemWidth * position)
+                    .width(itemWidth)
+                    .fillMaxHeight()
+                    .padding(4.dp)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(50)),
+            )
+            Row(modifier = Modifier.fillMaxSize()) {
+                GroupTabs.forEachIndexed { index, title ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .clickable { onSelect(index) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (index == selected) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

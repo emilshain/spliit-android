@@ -163,14 +163,14 @@ private fun ActivityList(
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             sections.forEach { section ->
-                item(key = "header-${section.group.name}") {
-                    DateBucketHeader(section.group.title)
+                item(key = "header-${section.date}") {
+                    DateBucketHeader(section.title)
                 }
                 items(section.activities, key = { it.id }) { activity ->
                     ActivityRow(
                         activity = activity,
                         participantName = activity.participantId?.let { model.participant(it)?.name },
-                        showsDate = section.group.needsDate,
+                        showsDate = false,
                         opensExpense = activity.expenseStillExists,
                         onOpen = { activity.expenseId?.let(onEdit) },
                     )

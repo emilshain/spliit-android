@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import app.spliit.data.local.RecentGroup
 import app.spliit.domain.CalendarDay
+import app.spliit.domain.DateHeading
 import app.spliit.ui.FakeSpliitServer
 import app.spliit.ui.group.GroupScreen
 import app.spliit.ui.seedGroups
@@ -18,7 +19,7 @@ import org.robolectric.annotation.Config
 import java.time.LocalDate
 
 /**
- * The expenses tab: the buckets the list is divided into, and the second page that only arrives
+ * The expenses tab: the days the list is divided into, and the second page that only arrives
  * when the footer asks for it.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -60,14 +61,14 @@ class ExpenseListTabTest {
         compose.waitUntil(TIMEOUT) {
             compose.onAllNodesWithText("Dinner").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("THIS WEEK").assertIsDisplayed()
+        compose.onNodeWithText(DateHeading.of(today)).assertIsDisplayed()
 
         // The paging footer composes once the list is scrolled to its end; Robolectric lays the
         // whole list out, so the second page follows on its own.
         compose.waitUntil(TIMEOUT) {
             compose.onAllNodesWithText("Rent").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("EARLIER THIS YEAR").assertIsDisplayed()
+        compose.onNodeWithText(DateHeading.of(today.minusMonths(3))).assertIsDisplayed()
     }
 
     private fun answerGroup(server: FakeSpliitServer) {

@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -159,16 +160,18 @@ private fun TotalsContent(
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             item(key = "group") {
                 SectionHeader("The group")
-                TotalFigure(
-                    label = if (stats.totalGroupSpendings < 0) {
-                        "Total group earnings"
-                    } else {
-                        "Total group spending"
-                    },
-                    minorUnits = stats.totalGroupSpendings,
-                    size = MoneySize.HERO,
-                    formatter = model.moneyFormatter,
-                )
+                TotalsCard {
+                    TotalFigure(
+                        label = if (stats.totalGroupSpendings < 0) {
+                            "Total group earnings"
+                        } else {
+                            "Total group spending"
+                        },
+                        minorUnits = stats.totalGroupSpendings,
+                        size = MoneySize.HERO,
+                        formatter = model.moneyFormatter,
+                    )
+                }
                 SectionFooter(
                     "Settling up is not spending, so reimbursements are left out of every " +
                         "figure here.",
@@ -179,29 +182,41 @@ private fun TotalsContent(
                 SectionHeader("You")
                 val spendings = stats.totalParticipantSpendings
                 val share = stats.totalParticipantShare?.takeIf { it.isFinite() }?.roundToInt()
-                if (identity != null && spendings != null) {
-                    TotalFigure(
-                        label = if (spendings < 0) "Your earnings" else "Your spending",
-                        minorUnits = spendings,
-                        size = MoneySize.LEAD,
-                        formatter = model.moneyFormatter,
-                        fraction = groupSlice(spendings, stats.totalGroupSpendings),
-                    )
+
+                TotalsCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (identity != null && spendings != null) {
+                            TotalFigure(
+                                label = if (spendings < 0) "Your earnings" else "Your spending",
+                                minorUnits = spendings,
+                                size = MoneySize.LEAD,
+                                formatter = model.moneyFormatter,
+                                fraction = groupSlice(spendings, stats.totalGroupSpendings),
+                            )
+                        }
+                        if (identity != null && share != null) {
+                            TotalFigure(
+                                label = "Your share",
+                                minorUnits = share,
+                                size = MoneySize.LEAD,
+                                formatter = model.moneyFormatter,
+                                fraction = groupSlice(share, stats.totalGroupSpendings),
+                            )
+                        }
+                        if (identity == null) {
+                            Text(
+                                text = "Say who you are and this card also says what you have " +
+                                    "paid, and what your share of the group came to.",
+                                style = SpliitType.Secondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IdentityRow(identity, identityIsNobody, onIdentify)
+                    }
                 }
-                if (identity != null && share != null) {
-                    TotalFigure(
-                        label = "Your share",
-                        minorUnits = share,
-                        size = MoneySize.LEAD,
-                        formatter = model.moneyFormatter,
-                        fraction = groupSlice(share, stats.totalGroupSpendings),
-                    )
-                }
-                IdentityRow(identity, identityIsNobody, onIdentify)
                 SectionFooter(
                     if (identity == null) {
-                        "Pick yourself and this tab also says what you have paid, and what your " +
-                            "share of the group came to."
+                        "Pick yourself from the card above; the totals are already here."
                     } else {
                         "What you paid, against what was spent on you. The difference is your balance."
                     },
@@ -212,11 +227,13 @@ private fun TotalsContent(
                 item(key = "categories-header") { SectionHeader("By category") }
                 model.categorySpending.forEach { spending ->
                     item(key = "category-${spending.categoryId}") {
-                        CategoryRow(
-                            spending = spending,
-                            groupTotal = stats.totalGroupSpendings,
-                            formatter = model.moneyFormatter,
-                        )
+                        TotalsCard {
+                            CategoryRow(
+                                spending = spending,
+                                groupTotal = stats.totalGroupSpendings,
+                                formatter = model.moneyFormatter,
+                            )
+                        }
                     }
                 }
                 item(key = "categories-footer") {
@@ -249,7 +266,23 @@ private fun TotalsContent(
                     )
                 }
             }
+
+            item(key = "bottom") { Spacer(Modifier.height(24.dp)) }
         }
+    }
+}
+
+/** One block of figures, on a card like the expenses and the balances use. */
+@Composable
+private fun TotalsCard(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Box(modifier = Modifier.padding(18.dp)) { content() }
     }
 }
 
@@ -265,7 +298,7 @@ private fun TotalFigure(
     // already says which way it goes, and "Total group earnings −$40.00" says it twice while
     // contradicting itself.
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
@@ -289,10 +322,10 @@ private fun TotalFigure(
 @Composable
 private fun IdentityRow(identity: Participant?, identityIsNobody: Boolean, onIdentify: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("You", style = SpliitType.RowTitle)
+        Text("You are", style = SpliitType.Secondary, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onIdentify) {
             Text(
@@ -314,7 +347,7 @@ private fun CategoryRow(
     formatter: app.spliit.domain.MoneyFormatter,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
     ) {
