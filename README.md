@@ -63,7 +63,18 @@ export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
 
 ### Get the APK
 
-`dist/` is not committed, so either use the build already there or make one:
+The quickest way is the local script, which builds, aligns and signs it in one go:
+
+```sh
+bash run-local.sh apk         # dist/spliit-0.1.0-release.apk, for spliit.app groups
+bash run-local.sh apk debug   # dist/spliit-0.1.0-debug.apk, for a local http server
+```
+
+To do it without a terminal, double-click `make-apk.cmd` (or run `make-apk.cmd debug` for the debug build).
+
+Or do it by hand:
+
+`dist/` is not committed, so the build has to be made once per machine:
 
 ```sh
 export JAVA_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/jdk21"
