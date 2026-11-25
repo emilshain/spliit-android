@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,29 +70,15 @@ import java.util.Locale
  * Pushed from the information tab rather than being a tab of its own: of the group's screens this
  * is the one you consult rather than work in.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ActivityLogScreen(
+fun ActivityTab(
     model: GroupScreenModel,
-    onBack: () -> Unit,
     onEdit: (String) -> Unit,
 ) {
     LaunchedEffect(model) { model.loadActivitiesIfNeeded() }
     val scope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Activity") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+    Box(modifier = Modifier.fillMaxSize()) {
             val sections = model.activitySections
 
             when {
@@ -133,7 +120,6 @@ fun ActivityLogScreen(
                     onEdit = onEdit,
                 )
             }
-        }
     }
 }
 
@@ -161,7 +147,11 @@ private fun ActivityList(
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // Clear of the floating tab bar, which the list scrolls behind.
+            contentPadding = PaddingValues(top = 60.dp),
+        ) {
             sections.forEach { section ->
                 item(key = "header-${section.date}") {
                     DateBucketHeader(section.title)

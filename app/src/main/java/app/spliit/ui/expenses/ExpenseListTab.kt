@@ -3,6 +3,7 @@ package app.spliit.ui.expenses
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -105,6 +106,12 @@ fun ExpenseListTab(
                 val sections = filtered(model.sections, payerFilter)
                 val filterName = participants.firstOrNull { it.id == payerFilter }?.name
 
+                // A filter is a question about the whole group, so while one is on the pages
+                // behind the list are fetched without waiting to be scrolled to.
+                LaunchedEffect(payerFilter, model.expenses.size, model.hasMoreExpenses) {
+                    if (payerFilter != null && model.hasMoreExpenses) model.loadNextPage()
+                }
+
                 PullToRefreshBox(
                     // A pull reloads the first page and everything that counts it; paging is the
                     // footer's job and must not be what the spinner reports.
@@ -112,7 +119,11 @@ fun ExpenseListTab(
                     onRefresh = { model.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // Clear of the floating tab bar, which the list scrolls behind.
+            contentPadding = PaddingValues(top = 60.dp),
+        ) {
                         item(key = "summary") { BalanceSummaryCard(model = model) }
 
                         item(key = "search") {
@@ -164,7 +175,7 @@ fun ExpenseListTab(
                             }
                         }
 
-                        if (sections.isEmpty() && filterName != null) {
+                        if (sections.isEmpty() && filterName != null && !model.hasMoreExpenses) {
                             item(key = "no-filter-results") {
                                 Text(
                                     text = "Nothing here was paid by $filterName.",

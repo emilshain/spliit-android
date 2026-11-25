@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -39,6 +38,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -90,7 +90,6 @@ import java.util.Locale
 fun GroupsListScreen(
     container: AppContainer,
     onOpenGroup: (String) -> Unit,
-    onOpenSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val model = remember(container) { GroupsListModel(container, scope) }
@@ -101,14 +100,12 @@ fun GroupsListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
                 // The app's own name, once: the list below is plainly the groups, and a heading
                 // saying so would be a label on the obvious.
                 title = { Text("Spliit", style = SpliitType.Title) },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
-                },
             )
         },
         floatingActionButton = {

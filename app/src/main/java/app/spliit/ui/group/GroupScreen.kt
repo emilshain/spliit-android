@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +45,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +58,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -68,7 +74,7 @@ import app.spliit.data.model.Reimbursement
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.ServerInstance
-import app.spliit.ui.activity.ActivityLogScreen
+import app.spliit.ui.activity.ActivityTab
 import app.spliit.ui.balances.BalancesTab
 import app.spliit.ui.expenses.ExpenseDetailScreen
 import app.spliit.ui.expenses.ExpenseFormSheet
@@ -91,10 +97,10 @@ import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.random.Random
 
-private val GroupTabs = listOf("Expenses", "Balances", "Totals", "Information")
+private val GroupTabs = listOf("Expenses", "Balances", "Totals", "Activity")
 
 /** Where the group screen is, when it isn't showing a tab. */
-private enum class GroupDestination { TABS, SEARCH, ACTIVITY, DETAIL, SETTLEMENTS }
+private enum class GroupDestination { TABS, SEARCH, INFORMATION, DETAIL, SETTLEMENTS }
 
 /**
  * A group: its expenses, its balances, what it has spent, its notes, and who the person holding
@@ -170,14 +176,13 @@ fun GroupScreen(
         loadDetail(id)
     }
 
-    if (destination == GroupDestination.ACTIVITY) {
-        ActivityLogScreen(
+    if (destination == GroupDestination.INFORMATION) {
+        InformationScreen(
+            group = group,
             model = model,
-            onBack = {
-                destination = GroupDestination.TABS
-                tabIndex = GroupTabs.indexOf("Information").coerceAtLeast(0)
-            },
-            onEdit = openExpense,
+            stored = stored,
+            onBack = { destination = GroupDestination.TABS },
+            onIdentify = { pickerOpen = true },
         )
     } else if (destination == GroupDestination.DETAIL) {
         ExpenseDetailScreen(
@@ -215,6 +220,9 @@ fun GroupScreen(
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
                     title = {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
@@ -264,7 +272,16 @@ fun GroupScreen(
                             )
                         }
                     },
-                                    )
+                    actions = {
+                        // The group's own facts live one step in, behind a gear: the log took the
+                        // fourth tab.
+                        if (destination == GroupDestination.TABS) {
+                            IconButton(onClick = { destination = GroupDestination.INFORMATION }) {
+                                Icon(Icons.Filled.Settings, contentDescription = "Information")
+                            }
+                        }
+                    },
+                )
             },
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -308,13 +325,18 @@ fun GroupScreen(
                                 onEdit = openDetail,
                             )
                         } else {
-                            Column(modifier = Modifier.fillMaxSize()) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                // The pages run under the tab bar: a list that stops at the bar
+                                // looks cut off rather than scrolled.
                                 GroupPillTabs(
                                     selected = tabIndex,
                                     onSelect = { tabIndex = it },
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .zIndex(1f),
                                 )
 
-                                Box(modifier = Modifier.weight(1f)) {
+                                Box(modifier = Modifier.fillMaxSize()) {
                                     // Only the page moves: the tab row above it has already
                                     // answered the finger, and sliding it too would read as the
                                     // whole screen jumping.
@@ -372,14 +394,9 @@ fun GroupScreen(
                                                 onIdentify = { pickerOpen = true },
                                             )
 
-                                            else -> InformationTab(
-                                                group = group,
+                                            else -> ActivityTab(
                                                 model = model,
-                                                stored = stored,
-                                                onIdentify = { pickerOpen = true },
-                                                onOpenActivity = {
-                                                    destination = GroupDestination.ACTIVITY
-                                                },
+                                                onEdit = openExpense,
                                             )
                                         }
                                     }
@@ -437,7 +454,11 @@ fun GroupScreen(
  * reads as "choice", and the change of page is something the thumb sees before the content lands.
  */
 @Composable
-private fun GroupPillTabs(selected: Int, onSelect: (Int) -> Unit) {
+private fun GroupPillTabs(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val position by animateFloatAsState(
         targetValue = selected.toFloat(),
         animationSpec = SpliitMotion.spatialDefault(),
@@ -445,9 +466,19 @@ private fun GroupPillTabs(selected: Int, onSelect: (Int) -> Unit) {
     )
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            // A fade rather than a solid strip: the page passes behind the bar and disappears
+            // into the background instead of being clipped by an edge.
+            .background(
+                Brush.verticalGradient(
+                    0f to MaterialTheme.colorScheme.background,
+                    0.7f to MaterialTheme.colorScheme.background,
+                    1f to Color.Transparent,
+                ),
+            )
+            .padding(top = 8.dp, bottom = 18.dp)
+            .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
@@ -545,8 +576,50 @@ private fun identityOf(
         as? ActiveParticipant.Participant)
         ?.let { answer -> group.participants.firstOrNull { it.id == answer.id } }
 
+/** The group's own facts, one step in from the gear in the toolbar. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InformationScreen(
+    group: Group?,
+    model: GroupScreenModel,
+    stored: RecentGroup?,
+    onBack: () -> Unit,
+    onIdentify: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+                title = { Text("Information") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (group == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                InformationTab(
+                    group = group,
+                    model = model,
+                    stored = stored,
+                    onIdentify = onIdentify,
+                )
+            }
+        }
+    }
+}
+
 /**
- * The identity a new expense starts from, the group's own facts, and the way to its history.
+ * The identity a new expense starts from, and the group's own facts.
  */
 @Composable
 private fun InformationTab(
@@ -554,7 +627,6 @@ private fun InformationTab(
     model: GroupScreenModel,
     stored: RecentGroup?,
     onIdentify: () -> Unit,
-    onOpenActivity: () -> Unit,
 ) {
     val identity = identityOf(stored, group)
 
@@ -599,35 +671,6 @@ private fun InformationTab(
                 Fact("Currency", currencyLabel(group))
                 Fact("Created", dateLabel(group.createdAt))
                 model.instanceUrl?.let { Fact("Server", ServerInstance.displayName(it)) }
-            }
-        }
-
-        // The log belongs with the things this tab holds because it is something you look up
-        // rather than work in — and there is no room for a fifth tab.
-        Card {
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenActivity),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(
-                    Icons.Filled.History,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Activity", style = SpliitType.RowTitle)
-                    Text(
-                        text = "Everything that has happened in this group, and who did it.",
-                        style = SpliitType.Secondary,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
 

@@ -79,9 +79,8 @@ class BalancesTabTest {
         }
         compose.onNodeWithText("Ana owes Bruno").assertIsDisplayed()
         compose.onNodeWithText("Mark as paid").assertIsDisplayed()
-        // The identity row says who the tab is read for, rather than asking again — so Ana
-        // appears both as the answer and as her own row in the group.
-        assertEquals(2, compose.onAllNodesWithText("Ana").fetchSemanticsNodes().size)
+        // The card already says whose balance this is, so Ana appears once: her own row.
+        assertEquals(1, compose.onAllNodesWithText("Ana").fetchSemanticsNodes().size)
     }
 
     private companion object {

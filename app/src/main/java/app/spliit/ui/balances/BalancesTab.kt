@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -117,7 +117,11 @@ private fun BalancesContent(
     val largest = maxOf(model.balances.values.maxOfOrNull { abs(it.total) } ?: 0, 1)
     var suggestedOpen by remember { mutableStateOf(true) }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // Clear of the floating tab bar, which the list scrolls behind.
+            contentPadding = PaddingValues(top = 60.dp),
+        ) {
         item(key = "you-header") { SectionHeader("You") }
         item(key = "you-card") {
             YouCard(
@@ -127,16 +131,6 @@ private fun BalancesContent(
                 onClick = if (identity != null) onOpenSettlements else onIdentify,
             )
         }
-        item(key = "identity") { IdentityRow(identity, identityIsNobody, onIdentify) }
-        if (identity == null) {
-            item(key = "identity-footer") {
-                SectionFooter(
-                    "Pick yourself once and this group is read from where you stand: your own " +
-                        "balance first, and your name already filled in on a new expense.",
-                )
-            }
-        }
-
         item(key = "balances-header") { SectionHeader("Balances") }
         items(group.participants, key = { it.id }) { participant ->
             BalanceCard(
@@ -265,28 +259,6 @@ private fun YouCard(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "My settlements",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun IdentityRow(identity: Participant?, identityIsNobody: Boolean, onIdentify: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("You are", style = SpliitType.Secondary, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.weight(1f))
-        TextButton(onClick = onIdentify) {
-            Text(
-                when {
-                    identity != null -> identity.name
-                    identityIsNobody -> "Nobody"
-                    else -> "Say who you are"
-                },
             )
         }
     }
