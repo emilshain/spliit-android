@@ -1,5 +1,7 @@
 package app.spliit.ui.search
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,8 +11,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WifiOff
@@ -22,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -29,11 +33,11 @@ import app.spliit.data.model.ExpenseListItem
 import app.spliit.domain.ExpenseSearchMatch
 import app.spliit.ui.expenses.ExpenseRow
 import app.spliit.ui.expenses.ExpenseUndoBar
-import app.spliit.ui.expenses.SwipeableExpense
 import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SpliitType
@@ -120,11 +124,28 @@ private fun Results(
             item(key = "header-${section.date}") {
                 DateBucketHeader(section.title)
             }
-            items(section.expenses, key = { it.id }) { expense ->
-                SwipeableExpense(
-                    onDelete = { model.requestDelete(expense) },
-                    onClick = { onEdit(expense.id) },
-                    modifier = Modifier.animateItem(),
+            itemsIndexed(
+                items = section.expenses,
+                key = { _, expense -> expense.id },
+            ) { index, expense ->
+                // Results open on tap, like the list they came from: deleting lives on the
+                // expense itself.
+                val shape = RoundedCornerShape(
+                    topStart = if (index == 0) 16.dp else 6.dp,
+                    topEnd = if (index == 0) 16.dp else 6.dp,
+                    bottomStart = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
+                    bottomEnd = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
+                )
+                val interaction = remember { MutableInteractionSource() }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem()
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                        ) { onEdit(expense.id) }
+                        .pressScale(interaction, pressedScale = 0.98f),
                 ) {
                     Column {
                         ExpenseRow(
@@ -132,13 +153,14 @@ private fun Results(
                             payerPosition = model.participantPosition(expense.paidBy.id),
                             formatter = model.moneyFormatter,
                             activeParticipantId = model.actorId,
+                            shape = shape,
                         )
                         if (matchedInNotes(expense, filter)) {
                             Text(
                                 text = "Matched in notes",
                                 style = SpliitType.Secondary,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 62.dp, bottom = 8.dp),
+                                modifier = Modifier.padding(start = 78.dp, end = 16.dp, bottom = 8.dp),
                             )
                         }
                     }
