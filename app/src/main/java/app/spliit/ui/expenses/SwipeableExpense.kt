@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 fun SwipeableExpense(
     onDelete: () -> Unit,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val state = rememberSwipeToDismissBoxState(
@@ -40,6 +41,7 @@ fun SwipeableExpense(
     )
 
     SwipeToDismissBox(
+        modifier = modifier,
         state = state,
         enableDismissFromStartToEnd = false,
         backgroundContent = {

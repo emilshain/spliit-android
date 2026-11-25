@@ -147,6 +147,22 @@ object SpliitType {
         fontSize = 13.sp,
     )
 
+    /** A number that is the point of the screen: a group's balance, an expense's total. */
+    val Display = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        letterSpacing = (-0.4).sp,
+    )
+
+    /** The caption above a number — "you are owed", "total amount". Small, and never a sentence. */
+    val Overline = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 11.sp,
+        letterSpacing = 1.1.sp,
+    )
+
     /** "Starred", "Recent groups" and the rest: the only thing naming a section. */
     val SectionHeader = TextStyle(
         fontFamily = FontFamily.SansSerif,
@@ -165,6 +181,7 @@ fun SpliitTheme(
         MaterialTheme(
             colorScheme = SpliitPalette.scheme(dark),
             typography = Typography(),
+            shapes = SpliitShapes.Material,
             content = content,
         )
     }

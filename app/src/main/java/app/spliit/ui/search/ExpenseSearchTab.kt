@@ -147,6 +147,7 @@ private fun Results(
                 SwipeableExpense(
                     onDelete = { model.requestDelete(expense) },
                     onClick = { onEdit(expense.id) },
+                    modifier = Modifier.animateItem(),
                 ) {
                     Column {
                         ExpenseRow(

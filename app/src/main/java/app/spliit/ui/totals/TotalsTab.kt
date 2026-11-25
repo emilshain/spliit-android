@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +45,7 @@ import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
+import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -372,16 +374,24 @@ private fun CategoryRow(
  */
 @Composable
 private fun SliceBar(fraction: Float) {
+    // The bar grows to its length instead of appearing at it: the figures above are read first,
+    // and a bar that arrives with them reads as the same fact told twice rather than a second one.
+    val target = fraction.coerceIn(0f, 1f)
+    val grown by animateFloatAsState(
+        targetValue = target,
+        animationSpec = SpliitMotion.spatialFast(),
+        label = "slice",
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(6.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)),
     ) {
-        if (fraction > 0f) {
+        if (grown > 0f) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                    .fillMaxWidth(grown)
                     .height(6.dp)
                     .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)),
             )
