@@ -59,9 +59,10 @@ export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
 
 ## Installing on a phone
 
-`minSdk = 26`Working on the code? Read [AGENTS.md](AGENTS.md) first — it records the conventions the UI follows, including the rule that every loading page draws a skeleton rather than a spinner.
+`minSdk = 26`, so any phone on Android 8.0 or newer can run it. The release APK is ~1.9 MB.
 
-, so any phone on Android 8.0 or newer can run it. The release APK is ~1.9 MB.
+Working on the code? Read [AGENTS.md](AGENTS.md) first — it records the UI conventions,
+including the rule that every loading page draws a skeleton rather than a spinner.
 
 ### Get the APK
 
