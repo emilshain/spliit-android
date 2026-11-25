@@ -58,6 +58,7 @@ import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitType
+import app.spliit.ui.theme.TornReceiptShape
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -182,7 +183,7 @@ private fun Receipt(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
+            shape = TornReceiptShape(),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column {
@@ -295,7 +296,8 @@ private fun Receipt(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        // Extra at the foot: the tear cuts into the card below this row.
+                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(

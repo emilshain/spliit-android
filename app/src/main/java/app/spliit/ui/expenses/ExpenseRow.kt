@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,6 +49,7 @@ fun ExpenseRow(
     formatter: MoneyFormatter,
     activeParticipantId: String?,
     modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(16.dp),
 ) {
     val balance = activeParticipantId?.let { ExpenseBalance.of(it, expense) }
     val reading = balance?.takeIf { it != 0 }?.let { ExpenseBalance.reading(it, expense) }
@@ -55,8 +57,9 @@ fun ExpenseRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 3.dp),
-        shape = RoundedCornerShape(16.dp),
+            // Neighbours in a day nearly touch; the shared edge keeps the small corner.
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(

@@ -2,22 +2,21 @@ package app.spliit.ui.expenses
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import app.spliit.ui.theme.ExpressiveSwipe
+import app.spliit.ui.theme.SwipeAction
+import app.spliit.ui.theme.pressScale
 
 /**
  * A row that deletes from the trailing edge.
@@ -25,7 +24,6 @@ import androidx.compose.ui.unit.dp
  * The row itself is not dismissed: the store removes it, and the list re-renders — which keeps
  * the gesture and the undo window in one place.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableExpense(
     onDelete: () -> Unit,
@@ -33,38 +31,32 @@ fun SwipeableExpense(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val state = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) onDelete()
-            false
-        },
-    )
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(16.dp)
 
-    SwipeToDismissBox(
+    ExpressiveSwipe(
         modifier = modifier,
-        state = state,
-        enableDismissFromStartToEnd = false,
-        backgroundContent = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.errorContainer)
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
-        },
+        shape = shape,
+        endToStart = SwipeAction(
+            icon = Icons.Filled.Delete,
+            label = "Delete",
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+            collapses = true,
+            onAction = onDelete,
+        ),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
-                .clickable(onClick = onClick),
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onClick = onClick,
+                )
+                .pressScale(interaction, pressedScale = 0.98f),
         ) {
             content()
         }

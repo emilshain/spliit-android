@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -46,11 +46,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
@@ -79,6 +76,8 @@ import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.ExpressiveMenu
 import app.spliit.ui.theme.ExpressiveMenuItem
+import app.spliit.ui.theme.ExpressiveSwipe
+import app.spliit.ui.theme.SwipeAction
 import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
@@ -266,6 +265,10 @@ fun GroupsListScreen(
 
 private enum class GroupsSheet { None, Create, AddByLink }
 
+/** A card's own corners, and the smaller ones it shares with the card above or below it. */
+private val GroupCardCorner = 22.dp
+private val AdjacentCardCorner = 10.dp
+
 /**
  * The one way in to a new group, at the bottom right where an add belongs.
  *
@@ -429,10 +432,12 @@ private fun GroupsList(
         // starred or archived looks exactly as it did before either existed.
         if (starred.isNotEmpty()) {
             item(key = "starred") { SectionHeader("Starred") }
-            items(starred, key = { it.groupId }) { group ->
+            itemsIndexed(starred, key = { _, group -> group.groupId }) { index, group ->
                 GroupRow(
                     group = group,
                     summary = model.summaries[group.groupId],
+                    first = index == 0,
+                    last = index == starred.lastIndex,
                     onClick = { onOpenGroup(group.groupId) },
                     onStar = { scope.launch { container.recentGroups.setStarred(!group.isStarred, group.groupId) } },
                     onArchive = { scope.launch { container.recentGroups.setArchived(!group.isArchived, group.groupId) } },
@@ -443,10 +448,12 @@ private fun GroupsList(
 
         if (recent.isNotEmpty()) {
             item(key = "recent") { SectionHeader("Recent groups") }
-            items(recent, key = { it.groupId }) { group ->
+            itemsIndexed(recent, key = { _, group -> group.groupId }) { index, group ->
                 GroupRow(
                     group = group,
                     summary = model.summaries[group.groupId],
+                    first = index == 0,
+                    last = index == recent.lastIndex,
                     onClick = { onOpenGroup(group.groupId) },
                     onStar = { scope.launch { container.recentGroups.setStarred(!group.isStarred, group.groupId) } },
                     onArchive = { scope.launch { container.recentGroups.setArchived(!group.isArchived, group.groupId) } },
@@ -457,10 +464,12 @@ private fun GroupsList(
 
         if (archived.isNotEmpty()) {
             item(key = "archived") { SectionHeader("Archived") }
-            items(archived, key = { it.groupId }) { group ->
+            itemsIndexed(archived, key = { _, group -> group.groupId }) { index, group ->
                 GroupRow(
                     group = group,
                     summary = model.summaries[group.groupId],
+                    first = index == 0,
+                    last = index == archived.lastIndex,
                     onClick = { onOpenGroup(group.groupId) },
                     onStar = { scope.launch { container.recentGroups.setStarred(!group.isStarred, group.groupId) } },
                     onArchive = { scope.launch { container.recentGroups.setArchived(!group.isArchived, group.groupId) } },
@@ -497,66 +506,69 @@ private fun SectionHeader(text: String) {
 private fun GroupRow(
     group: RecentGroup,
     summary: GroupSummary?,
+    first: Boolean,
+    last: Boolean,
     onClick: () -> Unit,
     onStar: () -> Unit,
     onArchive: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> onStar()
-                SwipeToDismissBoxValue.EndToStart -> onArchive()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            // The row stays: these are toggles, not a dismissal, and the list re-renders from
-            // the store with the new flag.
-            false
-        },
+    var menuOpen by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+
+    // Cards that touch are one group: the sides they share take the small corner and the sides
+    // facing air keep the large one, so a section reads as a stack rather than a pile of tiles.
+    val shape = RoundedCornerShape(
+        topStart = if (first) GroupCardCorner else AdjacentCardCorner,
+        topEnd = if (first) GroupCardCorner else AdjacentCardCorner,
+        bottomStart = if (last) GroupCardCorner else AdjacentCardCorner,
+        bottomEnd = if (last) GroupCardCorner else AdjacentCardCorner,
     )
 
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            val isStar = dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 24.dp),
-                contentAlignment = if (isStar) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                if (dismissState.dismissDirection != SwipeToDismissBoxValue.Settled) {
-                    Icon(
-                        imageVector = if (isStar) Icons.Filled.Star else Icons.Filled.Archive,
-                        contentDescription = null,
-                        tint = if (isStar) Color(0xFFFFCC00) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            // Neighbours nearly touch; only the top of a section gets air above it.
+            .padding(top = if (first) 6.dp else 0.dp, bottom = 2.dp),
     ) {
-        Box {
-            var menuOpen by remember { mutableStateOf(false) }
-
+        ExpressiveSwipe(
+            modifier = Modifier.fillMaxWidth(),
+            shape = shape,
+            startToEnd = SwipeAction(
+                icon = Icons.Filled.Star,
+                label = if (group.isStarred) "Unstar" else "Star",
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                onAction = onStar,
+            ),
+            endToStart = SwipeAction(
+                icon = Icons.Filled.Archive,
+                label = if (group.isArchived) "Unarchive" else "Archive",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                onAction = onArchive,
+            ),
+        ) {
             // A card rather than a bare row: the list is a set of things, and each one is
             // something you open.
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 5.dp),
-                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth(),
+                shape = shape,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .combinedClickable(
+                            interactionSource = interaction,
+                            indication = null,
                             onClick = onClick,
                             onLongClick = { menuOpen = true },
                         )
+                        // The card dips under the finger and settles back on a spring, with no
+                        // ripple spreading across it.
+                        .pressScale(interaction, pressedScale = 0.98f)
                         .padding(horizontal = 14.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -595,37 +607,37 @@ private fun GroupRow(
                     )
                 }
             }
+        }
 
-            ExpressiveMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-            ) {
-                ExpressiveMenuItem(
-                    text = if (group.isStarred) "Unstar" else "Star",
-                    leadingIcon = Icons.Filled.Star,
-                    onClick = {
-                        menuOpen = false
-                        onStar()
-                    },
-                )
-                ExpressiveMenuItem(
-                    text = if (group.isArchived) "Unarchive" else "Archive",
-                    leadingIcon = Icons.Filled.Archive,
-                    onClick = {
-                        menuOpen = false
-                        onArchive()
-                    },
-                )
-                ExpressiveMenuItem(
-                    text = "Remove",
-                    leadingIcon = Icons.Filled.Delete,
-                    destructive = true,
-                    onClick = {
-                        menuOpen = false
-                        onRemove()
-                    },
-                )
-            }
+        ExpressiveMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+        ) {
+            ExpressiveMenuItem(
+                text = if (group.isStarred) "Unstar" else "Star",
+                leadingIcon = Icons.Filled.Star,
+                onClick = {
+                    menuOpen = false
+                    onStar()
+                },
+            )
+            ExpressiveMenuItem(
+                text = if (group.isArchived) "Unarchive" else "Archive",
+                leadingIcon = Icons.Filled.Archive,
+                onClick = {
+                    menuOpen = false
+                    onArchive()
+                },
+            )
+            ExpressiveMenuItem(
+                text = "Remove",
+                leadingIcon = Icons.Filled.Delete,
+                destructive = true,
+                onClick = {
+                    menuOpen = false
+                    onRemove()
+                },
+            )
         }
     }
 }

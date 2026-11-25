@@ -195,20 +195,34 @@ fun ExpenseListTab(
                             itemsIndexed(
                                 items = section.expenses,
                                 key = { _, expense -> expense.id },
-                            ) { _, expense ->
+                            ) { index, expense ->
                                 // Opening is the whole gesture here: deleting lives on the
                                 // expense itself, so the row is free to belong to the pager.
+                                val shape = RoundedCornerShape(
+                                    topStart = if (index == 0) 16.dp else 6.dp,
+                                    topEnd = if (index == 0) 16.dp else 6.dp,
+                                    bottomStart = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
+                                    bottomEnd = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
+                                )
+                                val interaction = remember { MutableInteractionSource() }
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .animateItem()
-                                        .clickable { onEdit(expense.id) },
+                                        // No ripple over a card: the card itself dips, the way a
+                                        // SwiftUI button does when it is touched.
+                                        .clickable(
+                                            interactionSource = interaction,
+                                            indication = null,
+                                        ) { onEdit(expense.id) }
+                                        .pressScale(interaction, pressedScale = 0.98f),
                                 ) {
                                     ExpenseRow(
                                         expense = expense,
                                         payerPosition = model.participantPosition(expense.paidBy.id),
                                         formatter = model.moneyFormatter,
                                         activeParticipantId = model.actorId,
+                                        shape = shape,
                                     )
                                 }
                             }

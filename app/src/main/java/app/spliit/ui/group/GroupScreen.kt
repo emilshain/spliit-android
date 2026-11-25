@@ -14,6 +14,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -115,6 +116,7 @@ import app.spliit.ui.theme.SkeletonLine
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitMotion
+import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.totals.TotalsTab
 import java.time.format.DateTimeFormatter
@@ -642,12 +644,19 @@ private fun GroupPillTabs(
             )
             Row(modifier = Modifier.fillMaxSize()) {
                 GroupTabs.forEachIndexed { index, title ->
+                    // A tab is a choice, not a button: the ripple washing over the pill read as
+                    // a press on glass. It dips under the thumb and springs back instead.
+                    val interaction = remember { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(50))
-                            .clickable { onSelect(index) },
+                            .clickable(
+                                interactionSource = interaction,
+                                indication = null,
+                            ) { onSelect(index) }
+                            .pressScale(interaction, pressedScale = 0.94f),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
