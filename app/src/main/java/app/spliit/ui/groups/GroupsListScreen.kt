@@ -3,10 +3,13 @@ package app.spliit.ui.groups
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -25,11 +29,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.Icons
@@ -57,12 +65,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
@@ -111,24 +125,64 @@ fun GroupsListScreen(
     val scope = rememberCoroutineScope()
     val model = remember(container) { GroupsListModel(container, scope) }
     var sheet by remember { mutableStateOf<GroupsSheet>(GroupsSheet.None) }
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
 
     LaunchedEffect(model) { model.start() }
 
     Scaffold(
         topBar = {
             // The app's own name, once: the list below is plainly the groups, and a heading
-            // saying so would be a label on the obvious. A plain headline rather than an app
-            // bar: there is no navigation or action up here, and the bar's fixed 64dp box left
-            // the title floating in a band of empty space. Sized to the text, it sits on the
-            // system inset and the list starts straight under it.
-            Text(
-                text = "Spliit",
-                style = SpliitType.Title,
+            // saying so would be a label on the obvious. The search sits beside it, because a
+            // group you already have is something you look for rather than something you add.
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 10.dp),
-            )
+                    .windowInsetsPadding(WindowInsets.statusBars),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Spliit",
+                        style = SpliitType.Title,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = {
+                            searching = !searching
+                            if (!searching) query = ""
+                        },
+                    ) {
+                        Icon(
+                            imageVector = if (searching) {
+                                Icons.Filled.Close
+                            } else {
+                                Icons.Filled.Search
+                            },
+                            contentDescription = if (searching) "Close search" else "Search groups",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = searching,
+                    enter = expandVertically(SpliitMotion.spatialDefault()) +
+                        fadeIn(SpliitMotion.effectsDefault()),
+                    exit = shrinkVertically(SpliitMotion.spatialFast()) +
+                        fadeOut(SpliitMotion.effectsFast()),
+                ) {
+                    GroupSearchField(
+                        query = query,
+                        onQueryChange = { query = it },
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
+                    )
+                }
+            }
         },
         floatingActionButton = {
             AddGroupButton(
@@ -137,6 +191,15 @@ fun GroupsListScreen(
             )
         },
     ) { padding ->
+        val matches = remember(model.groups, query) {
+            val needle = query.trim()
+            if (needle.isEmpty()) {
+                model.groups
+            } else {
+                model.groups.filter { it.groupName.contains(needle, ignoreCase = true) }
+            }
+        }
+
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (model.groups.isEmpty()) {
                 EmptyState(
@@ -163,13 +226,20 @@ fun GroupsListScreen(
                         }
                     }
                 }
+            } else if (matches.isEmpty()) {
+                EmptyState(
+                    art = EmptyStateArt.Icon(Icons.Filled.Search),
+                    title = "No groups match “${query.trim()}”",
+                ) {
+                    Button(onClick = { query = "" }) { Text("Clear search") }
+                }
             } else {
                 PullToRefreshBox(
                     isRefreshing = model.isRefreshing,
                     onRefresh = { model.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    GroupsList(model = model, onOpenGroup = onOpenGroup)
+                    GroupsList(model = model, groups = matches, onOpenGroup = onOpenGroup)
                 }
             }
         }
@@ -327,11 +397,15 @@ private data class FabAction(
 )
 
 @Composable
-private fun GroupsList(model: GroupsListModel, onOpenGroup: (String) -> Unit) {
+private fun GroupsList(
+    model: GroupsListModel,
+    groups: List<RecentGroup>,
+    onOpenGroup: (String) -> Unit,
+) {
     val scope = rememberCoroutineScope()
-    val starred = model.groups.filter { it.isStarred && !it.isArchived }
-    val recent = model.groups.filter { !it.isStarred && !it.isArchived }
-    val archived = model.groups.filter { it.isArchived }
+    val starred = groups.filter { it.isStarred && !it.isArchived }
+    val recent = groups.filter { !it.isStarred && !it.isArchived }
+    val archived = groups.filter { it.isArchived }
     val container = model.container
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -403,6 +477,80 @@ private fun GroupsList(model: GroupsListModel, onOpenGroup: (String) -> Unit) {
 
         // Room for the last card to clear the add button.
         item(key = "bottom") { Spacer(Modifier.padding(bottom = 96.dp)) }
+    }
+}
+
+/**
+ * The search field, an editable twin of the expenses list's search pill: same height, same
+ * rounded tonal surface, with a clear button once there is anything to clear. It takes focus as
+ * soon as it appears, because tapping the button was the request to type.
+ */
+@Composable
+private fun GroupSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth().height(48.dp),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                decorationBox = { field ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = "Search groups",
+                                style = SpliitType.Secondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        field()
+                    }
+                },
+            )
+            if (query.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Clear search",
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(50))
+                        .clickable { onQueryChange("") }
+                        .padding(7.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
