@@ -1,5 +1,11 @@
 package app.spliit.ui.groups
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -51,7 +57,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,6 +78,7 @@ import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -79,6 +90,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -192,55 +204,126 @@ private enum class GroupsSheet { None, Create, AddByLink }
 /**
  * The one way in to a new group, at the bottom right where an add belongs.
  *
- * It opens onto the two kinds of adding — making one, or pasting a link to one — because the
- * difference is a decision, not something to hide behind a guess.
+ * Tapping it unfolds the two kinds of adding — making one, or pasting a link to one — as pills
+ * that rise out of the button, staggered from the one nearest it upwards. The plus turns into a
+ * close, and the same button folds them away again.
  */
 @Composable
 private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
-    Box {
-        var open by remember { mutableStateOf(false) }
-        val fabInteraction = remember { MutableInteractionSource() }
+    var open by remember { mutableStateOf(false) }
+    var revealed by remember { mutableStateOf(emptyList<Int>()) }
+    val fabInteraction = remember { MutableInteractionSource() }
+
+    val actions = remember(onCreate, onAddByLink) {
+        listOf(
+            FabAction("Create group", Icons.Filled.Add, onCreate),
+            FabAction("Add by link", Icons.Filled.Link, onAddByLink),
+        )
+    }
+
+    // Revealed from the button upwards, one per beat: the stack unfolds instead of appearing
+    // all at once. Closing clears them together, because a stagger on the way out reads as lag.
+    LaunchedEffect(open) {
+        if (!open) {
+            revealed = emptyList()
+            return@LaunchedEffect
+        }
+        for (index in actions.indices.reversed()) {
+            revealed = revealed + index
+            delay(50)
+        }
+    }
+
+    val rotation by animateFloatAsState(
+        targetValue = if (open) 45f else 0f,
+        animationSpec = SpliitMotion.snappy(),
+        label = "add button rotation",
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (open) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        animationSpec = SpliitMotion.smooth(),
+        label = "add button container",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (open) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onPrimary
+        },
+        animationSpec = SpliitMotion.smooth(),
+        label = "add button content",
+    )
+
+    Column(
+        modifier = Modifier.padding(end = 4.dp, bottom = 8.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
+        actions.forEachIndexed { index, action ->
+            AnimatedVisibility(
+                visible = index in revealed,
+                enter = scaleIn(
+                    animationSpec = SpliitMotion.snappy(),
+                    initialScale = 0.86f,
+                    transformOrigin = TransformOrigin(1f, 1f),
+                ) + fadeIn(SpliitMotion.smooth()),
+                exit = fadeOut(SpliitMotion.effectsFast()),
+            ) {
+                Surface(
+                    onClick = {
+                        open = false
+                        action.onClick()
+                    },
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .padding(bottom = 10.dp)
+                        .shadow(elevation = 6.dp, shape = RoundedCornerShape(50)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = action.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(action.label, style = SpliitType.RowTitle)
+                    }
+                }
+            }
+        }
 
         FloatingActionButton(
-            onClick = { open = true },
+            onClick = { open = !open },
             interactionSource = fabInteraction,
             // Off the Scaffold's own 16dp corner by the same 4dp/8dp the expense list's add
             // button sits in from its edges, so the two land in the same place on screen.
-            modifier = Modifier
-                .padding(end = 4.dp, bottom = 8.dp)
-                .pressScale(fabInteraction),
+            modifier = Modifier.pressScale(fabInteraction),
             shape = RoundedCornerShape(18.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            containerColor = containerColor,
+            contentColor = contentColor,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Add group")
-        }
-
-        ExpressiveMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            placement = MenuPlacement.Above,
-            minWidth = 200.dp,
-        ) {
-            ExpressiveMenuItem(
-                text = "Create group",
-                leadingIcon = Icons.Filled.Add,
-                onClick = {
-                    open = false
-                    onCreate()
-                },
-            )
-            ExpressiveMenuItem(
-                text = "Add by link",
-                leadingIcon = Icons.Filled.Link,
-                onClick = {
-                    open = false
-                    onAddByLink()
-                },
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = if (open) "Close" else "Add group",
+                modifier = Modifier.rotate(rotation),
             )
         }
     }
 }
+
+private data class FabAction(
+    val label: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+)
 
 @Composable
 private fun GroupsList(model: GroupsListModel, onOpenGroup: (String) -> Unit) {
