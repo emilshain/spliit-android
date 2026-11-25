@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -35,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -103,7 +106,16 @@ fun GroupsListScreen(
                 title = {
                     // No title on the welcome screen: it already names the app in its heading,
                     // and "Groups" over an empty screen labels a list that isn't there.
-                    Text(if (model.groups.isEmpty()) "" else "Groups")
+                    if (model.groups.isNotEmpty()) {
+                        Column {
+                            Text("Groups", style = SpliitType.Title)
+                            Text(
+                                text = groupCountLabel(model.groups.count { !it.isArchived }),
+                                style = SpliitType.Secondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 },
                 actions = {
                     Box {
@@ -345,68 +357,58 @@ private fun GroupRow(
         Box {
             var menuOpen by remember { mutableStateOf(false) }
 
-            Row(
+            // A card rather than a bare row: the list is a set of things, and each one is
+            // something you open.
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .combinedClickable(
-                        onClick = onClick,
-                        onLongClick = { menuOpen = true },
-                    )
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
+                    .padding(horizontal = 16.dp, vertical = 5.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surface,
             ) {
-                // Seeding on the ID rather than the name keeps a group's colour across a rename.
-                Monogram(
-                    name = group.groupName,
-                    colorIndex = MonogramPalette.indexFor(group.groupId),
-                    size = 40.dp,
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = group.groupName,
-                        style = SpliitType.RowTitle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = { menuOpen = true },
+                        )
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Seeding on the ID rather than the name keeps a group's colour across a rename.
+                    Monogram(
+                        name = group.groupName,
+                        colorIndex = MonogramPalette.indexFor(group.groupId),
+                        size = 42.dp,
                     )
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Filled.People,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Text(
-                                text = participantText(summary),
-                                style = SpliitType.Secondary,
-                            )
-                        }
-                        summary?.createdAt?.let { createdAt ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Filled.CalendarMonth,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Text(
-                                    text = dateLabel(createdAt),
-                                    style = SpliitType.Secondary,
-                                )
-                            }
-                        }
+                        Text(
+                            text = group.groupName,
+                            style = SpliitType.RowTitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = metaLine(summary),
+                            style = SpliitType.Secondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
+
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
@@ -439,6 +441,15 @@ private fun GroupRow(
         }
     }
 }
+
+/** "Nov 6, 2026 · 4 participants" — what the card can say that its title can't. */
+private fun metaLine(summary: GroupSummary?): String {
+    if (summary == null) return "…"
+    return listOf(dateLabel(summary.createdAt), participantText(summary)).joinToString(" · ")
+}
+
+private fun groupCountLabel(count: Int): String =
+    if (count == 1) "1 group" else "$count groups"
 
 /**
  * Localised, and pluralised here only because the app has no translation yet: the count of a

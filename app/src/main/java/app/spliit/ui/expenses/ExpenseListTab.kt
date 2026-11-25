@@ -1,7 +1,11 @@
 package app.spliit.ui.expenses
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,31 +14,46 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.LocalSpliitColors
+import app.spliit.ui.theme.Monogram
+import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.SpliitType
+import java.util.Locale
+import kotlin.math.abs
 
 /**
  * A group's expenses, newest first, grouped into the same date buckets the old app used so an
  * upgrading user sees a familiar list.
+ *
+ * The screen opens on the answer most people came for — what this group leaves them owed or
+ * owing — and the list follows it. Adding is a button over the list rather than a toolbar action,
+ * because it belongs to the expenses rather than to the screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +61,7 @@ fun ExpenseListTab(
     model: GroupScreenModel,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
+    onSearch: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -80,6 +100,12 @@ fun ExpenseListTab(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item(key = "summary") { BalanceSummaryCard(model = model) }
+
+                    item(key = "expenses-header") {
+                        ExpensesSectionHeader(onSearch = onSearch)
+                    }
+
                     model.expensesFailure?.let { failure ->
                         item(key = "failure") {
                             Row(
@@ -115,6 +141,9 @@ fun ExpenseListTab(
                             SwipeableExpense(
                                 onDelete = { model.requestDelete(expense) },
                                 onClick = { onEdit(expense.id) },
+                                // The row that was swiped leaves by sliding, and undo puts it
+                                // back where it was rather than at the top of the list.
+                                modifier = Modifier.animateItem(),
                             ) {
                                 ExpenseRow(
                                     expense = expense,
@@ -139,8 +168,23 @@ fun ExpenseListTab(
                         }
                     }
 
-                    item(key = "bottom") { Spacer(Modifier.padding(bottom = 24.dp)) }
+                    item(key = "bottom") { Spacer(Modifier.padding(bottom = 88.dp)) }
                 }
+            }
+        }
+
+        Surface(
+            onClick = onAdd,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 24.dp)
+                .size(56.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 6.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Add, contentDescription = "Add expense")
             }
         }
 
@@ -150,3 +194,120 @@ fun ExpenseListTab(
         )
     }
 }
+
+/**
+ * What this group leaves the person holding the phone with, and who is in it.
+ *
+ * Drawn only once the app knows who they are: a balance under nobody's name would be a number
+ * about a stranger, and the balances tab is where the whole picture lives.
+ */
+@Composable
+private fun BalanceSummaryCard(model: GroupScreenModel) {
+    val actor = model.actorId ?: return
+    val balance = model.balances[actor]?.total ?: return
+    val participants = model.group?.participants.orEmpty()
+
+    val label = when {
+        balance > 0 -> "You are owed"
+        balance < 0 -> "You owe"
+        else -> "Settled up"
+    }
+    val amountColor = when {
+        balance > 0 -> LocalSpliitColors.current.moneyPositive
+        balance < 0 -> LocalSpliitColors.current.moneyNegative
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = label.uppercase(Locale.getDefault()),
+                style = SpliitType.Overline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.size(6.dp))
+            Text(
+                text = model.moneyFormatter.string(abs(balance)),
+                style = SpliitType.Display,
+                color = amountColor,
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+            )
+
+            if (participants.isEmpty()) {
+                Text(
+                    text = "No participants yet",
+                    style = SpliitType.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // A handful is enough to say who is here; the information tab lists them all.
+                    participants.take(SHOWN_PARTICIPANTS).forEachIndexed { position, participant ->
+                        Monogram(
+                            name = participant.name,
+                            colorIndex = MonogramPalette.indexAtPosition(position),
+                            size = 30.dp,
+                        )
+                    }
+                    if (participants.size > SHOWN_PARTICIPANTS) {
+                        Text(
+                            text = "+${participants.size - SHOWN_PARTICIPANTS}",
+                            style = SpliitType.Secondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** "Expenses", and the way into searching them. */
+@Composable
+private fun ExpensesSectionHeader(onSearch: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Expenses",
+            style = SpliitType.RowTitle,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                .clickable(onClick = onSearch),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = "Search expenses",
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private const val SHOWN_PARTICIPANTS = 6

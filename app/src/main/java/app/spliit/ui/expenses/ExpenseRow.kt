@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -51,10 +52,17 @@ fun ExpenseRow(
     activeParticipantId: String?,
     modifier: Modifier = Modifier,
 ) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 3.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         CategoryGlyph(expense)
 
@@ -106,23 +114,24 @@ fun ExpenseRow(
             }
         }
     }
+    }
 }
 
 @Composable
 private fun CategoryGlyph(expense: ExpenseListItem) {
     Box(
         modifier = Modifier
-            .size(30.dp)
+            .size(42.dp)
             .background(
                 MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(8.dp),
+                RoundedCornerShape(13.dp),
             ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             CategoryIcons.icon(expense.category),
             contentDescription = expense.category?.name,
-            modifier = Modifier.size(17.dp),
+            modifier = Modifier.size(21.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
