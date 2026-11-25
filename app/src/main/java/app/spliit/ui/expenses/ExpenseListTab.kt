@@ -345,7 +345,6 @@ private fun ExpensesToolbar(
             ExpressiveMenu(
                 expanded = open,
                 onDismissRequest = { open = false },
-                minWidth = 208.dp,
             ) {
                 ExpressiveMenuItem(
                     text = "Anyone",

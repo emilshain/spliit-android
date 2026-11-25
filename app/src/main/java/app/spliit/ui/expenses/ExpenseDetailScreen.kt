@@ -110,7 +110,6 @@ fun ExpenseDetailScreen(
                             ExpressiveMenu(
                                 expanded = menuOpen,
                                 onDismissRequest = { menuOpen = false },
-                                minWidth = 180.dp,
                             ) {
                                 ExpressiveMenuItem(
                                     text = "Edit",

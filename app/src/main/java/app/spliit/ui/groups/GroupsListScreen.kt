@@ -531,7 +531,6 @@ private fun GroupRow(
             ExpressiveMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                minWidth = 200.dp,
             ) {
                 ExpressiveMenuItem(
                     text = if (group.isStarred) "Unstar" else "Star",

@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -80,7 +81,7 @@ fun ExpressiveMenu(
     placement: MenuPlacement = MenuPlacement.Below,
     alignEnd: Boolean = true,
     gap: Dp = 8.dp,
-    minWidth: Dp = 176.dp,
+    minWidth: Dp = 0.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!expanded) return
@@ -115,13 +116,18 @@ fun ExpressiveMenu(
                 ),
             ) + fadeIn(SpliitMotion.smooth()),
         ) {
+            // As wide as its longest row, and no wider than the screen it opens on.
+            val windowWidth = LocalConfiguration.current.screenWidthDp.dp
             Column(
                 modifier = modifier
-                    .widthIn(min = minWidth, max = 340.dp)
+                    .widthIn(
+                        min = minWidth,
+                        max = (windowWidth - 32.dp).coerceAtLeast(180.dp),
+                    )
                     .shadow(elevation = SpliitElevation.Menu, shape = shape, clip = false)
                     .clip(shape)
                     .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .padding(6.dp),
+                    .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
                 content = content,
             )

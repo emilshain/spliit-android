@@ -247,7 +247,6 @@ fun ExpenseFormSheet(
                     ExpressiveMenu(
                         expanded = payerMenuOpen,
                         onDismissRequest = { payerMenuOpen = false },
-                        minWidth = 220.dp,
                     ) {
                         group.participants.forEach { participant ->
                             ExpressiveMenuItem(
@@ -286,7 +285,6 @@ fun ExpenseFormSheet(
                         ExpressiveMenu(
                             expanded = categoryMenuOpen,
                             onDismissRequest = { categoryMenuOpen = false },
-                            minWidth = 240.dp,
                         ) {
                             categories.forEach { category ->
                                 ExpressiveMenuItem(

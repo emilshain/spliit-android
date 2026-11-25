@@ -259,7 +259,6 @@ fun CreateGroupSheet(
                         ExpressiveMenu(
                             expanded = serverMenuOpen,
                             onDismissRequest = { serverMenuOpen = false },
-                            minWidth = 230.dp,
                         ) {
                             knownInstances.forEach { url ->
                                 ExpressiveMenuItem(
