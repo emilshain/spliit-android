@@ -37,3 +37,4 @@ Thumbs.db
 
 # Gradle build output
 /dist/
+/make-apk.cmd
