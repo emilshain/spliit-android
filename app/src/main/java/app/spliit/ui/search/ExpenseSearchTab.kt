@@ -3,35 +3,35 @@ package app.spliit.ui.search
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import app.spliit.data.model.ExpenseListItem
 import app.spliit.domain.ExpenseSearchMatch
 import app.spliit.ui.expenses.ExpenseRow
@@ -41,6 +41,7 @@ import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SpliitType
 
 /**
@@ -117,12 +118,7 @@ fun ExpenseSearchTab(
                 // Typed, but nothing has come back yet — the debounce is still running or the
                 // request is in flight. Narrowing an existing search keeps the previous results
                 // up until the new ones replace them.
-                model.searchResults.isEmpty() -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+                model.searchResults.isEmpty() -> SearchSkeleton()
 
                 else -> Results(model = model, filter = model.filter, onEdit = onEdit)
             }
@@ -192,4 +188,17 @@ private fun Results(
 private fun matchedInNotes(expense: ExpenseListItem, filter: String?): Boolean {
     val query = filter ?: return false
     return ExpenseSearchMatch.of(expense.title, query) == ExpenseSearchMatch.NOTES
+}
+
+/** Rows in the shape of the results that are on their way back. */
+@Composable
+private fun SearchSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        repeat(6) { SkeletonRow() }
+    }
 }

@@ -4,17 +4,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Add
@@ -23,26 +22,27 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Activity
 import app.spliit.data.model.ActivityType
@@ -51,13 +51,15 @@ import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.SkeletonRow
+import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitType
-import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /**
  * What has happened to a group and when: expenses created, edited and deleted, and the times the
@@ -82,12 +84,7 @@ fun ActivityTab(
             val sections = model.activitySections
 
             when {
-                model.isLoadingActivities -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+                model.isLoadingActivities -> ActivitySkeleton()
 
                 model.didFailToLoad || model.didFailToLoadActivities -> EmptyState(
                     art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
@@ -269,3 +266,19 @@ private fun timestamp(time: Instant, showsDate: Boolean): String {
         .format(time.atZone(ZoneId.systemDefault()))
 }
 
+
+/** The log before it arrives: a couple of days, each with its entries. */
+@Composable
+private fun ActivitySkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = 16.dp, end = 16.dp, top = 68.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SkeletonSection()
+        repeat(3) { SkeletonRow() }
+        SkeletonSection(modifier = Modifier.padding(top = 12.dp))
+        repeat(3) { SkeletonRow() }
+    }
+}

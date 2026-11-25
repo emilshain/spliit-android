@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,6 +54,9 @@ import app.spliit.ui.theme.ExpressiveMenu
 import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
+import app.spliit.ui.theme.SkeletonCard
+import app.spliit.ui.theme.SkeletonRow
+import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitType
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -144,7 +146,7 @@ fun ExpenseDetailScreen(
                     participants = participants,
                 )
 
-                isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                isLoading -> ReceiptSkeleton()
 
                 else -> EmptyState(
                     art = EmptyStateArt.Icon(Icons.Filled.Warning),
@@ -416,3 +418,18 @@ private fun dateLabel(expense: ExpenseDetails): String =
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
         .withLocale(Locale.getDefault())
         .format(CalendarDay.dayOf(expense.expenseDate))
+
+/** The receipt, before the expense arrives. */
+@Composable
+private fun ReceiptSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SkeletonCard(height = 220.dp, shape = RoundedCornerShape(24.dp))
+        SkeletonSection(modifier = Modifier.padding(top = 8.dp))
+        repeat(3) { SkeletonRow(trailingWidth = 64.dp) }
+    }
+}

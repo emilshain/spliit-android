@@ -54,6 +54,8 @@ import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SkeletonCard
+import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SpliitType
 import java.util.Locale
 import kotlin.math.abs
@@ -79,12 +81,7 @@ fun ExpenseListTab(
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
-            model.isLoadingExpenses -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
+            model.isLoadingExpenses -> ExpenseListSkeleton()
 
             model.didFailToLoad || model.didFailToLoadExpenses -> EmptyState(
                 art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
@@ -453,3 +450,27 @@ private fun BalanceSummaryCard(model: GroupScreenModel) {
 }
 
 private const val SHOWN_PARTICIPANTS = 6
+
+/**
+ * The list before the expenses arrive: the summary card, then the rows in the shape they will
+ * take. Drawn instead of a spinner so the page does not jump when the data lands.
+ */
+@Composable
+private fun ExpenseListSkeleton() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 60.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        item {
+            SkeletonCard(
+                height = 92.dp,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+        items(6) {
+            SkeletonRow(modifier = Modifier.padding(horizontal = 16.dp))
+        }
+    }
+}

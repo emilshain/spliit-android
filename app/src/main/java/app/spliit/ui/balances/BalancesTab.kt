@@ -4,27 +4,26 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,10 +46,13 @@ import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.LocalSpliitColors
-import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySign
 import app.spliit.ui.theme.MoneySize
+import app.spliit.ui.theme.Monogram
+import app.spliit.ui.theme.SkeletonCard
+import app.spliit.ui.theme.SkeletonRow
+import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitType
 import kotlin.math.abs
 
@@ -72,12 +74,7 @@ fun BalancesTab(
     val group = model.group
 
     when {
-        model.isLoadingGroup || model.isLoadingBalances -> Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator()
-        }
+        model.isLoadingGroup || model.isLoadingBalances -> BalancesSkeleton()
 
         model.didFailToLoad || model.didFailToLoadBalances -> EmptyState(
             art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
@@ -483,3 +480,20 @@ private fun SectionHeader(text: String) {
     )
 }
 
+
+/** Your balance card, then the ledger, in the shape they will have. */
+@Composable
+private fun BalancesSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = 16.dp, end = 16.dp, top = 68.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SkeletonCard(height = 132.dp, shape = RoundedCornerShape(24.dp))
+        SkeletonSection(modifier = Modifier.padding(top = 10.dp))
+        repeat(3) {
+            SkeletonRow(trailingWidth = 64.dp)
+        }
+    }
+}
