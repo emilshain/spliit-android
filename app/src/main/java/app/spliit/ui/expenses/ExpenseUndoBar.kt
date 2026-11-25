@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.spliit.ui.group.GroupScreenModel
+import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 
@@ -58,6 +59,7 @@ fun ExpenseUndoBar(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.inverseSurface,
             tonalElevation = 0.dp,
+            shadowElevation = SpliitElevation.Bar,
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),

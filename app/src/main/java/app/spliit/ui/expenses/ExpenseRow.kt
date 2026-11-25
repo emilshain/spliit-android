@@ -57,7 +57,7 @@ fun ExpenseRow(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 3.dp),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),

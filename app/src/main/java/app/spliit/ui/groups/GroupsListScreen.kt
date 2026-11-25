@@ -78,6 +78,7 @@ import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import java.time.format.DateTimeFormatter
@@ -282,7 +283,7 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier
                         .padding(bottom = 10.dp)
-                        .shadow(elevation = 6.dp, shape = RoundedCornerShape(50)),
+                        .shadow(elevation = SpliitElevation.FloatingAction, shape = RoundedCornerShape(50)),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
@@ -479,7 +480,7 @@ private fun GroupRow(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 5.dp),
                 shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surface,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
                     modifier = Modifier

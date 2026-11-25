@@ -593,7 +593,7 @@ private fun GroupPillTabs(
                     .width(itemWidth)
                     .fillMaxHeight()
                     .padding(4.dp)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(50)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(50)),
             )
             Row(modifier = Modifier.fillMaxSize()) {
                 GroupTabs.forEachIndexed { index, title ->
@@ -1136,7 +1136,7 @@ private fun Card(content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 0.dp,
     ) {
         Box(modifier = Modifier.padding(16.dp)) { content() }

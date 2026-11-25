@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -119,14 +118,9 @@ fun ExpressiveMenu(
             Column(
                 modifier = modifier
                     .widthIn(min = minWidth, max = 340.dp)
-                    .shadow(elevation = 10.dp, shape = shape, clip = false)
+                    .shadow(elevation = SpliitElevation.Menu, shape = shape, clip = false)
                     .clip(shape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
-                        shape = shape,
-                    )
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
                     .padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
                 content = content,

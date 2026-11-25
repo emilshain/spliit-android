@@ -294,7 +294,7 @@ private fun ExpensesToolbar(
             onClick = onSearch,
             modifier = Modifier.weight(1f).height(46.dp),
             shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -398,7 +398,7 @@ private fun BalanceSummaryCard(model: GroupScreenModel) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),

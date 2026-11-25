@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
@@ -130,6 +131,30 @@ private val DarkColors = SpliitColors(
 )
 
 val LocalSpliitColors = staticCompositionLocalOf { LightColors }
+
+/**
+ * Elevation, the M3 Expressive way: tone first, shadow second.
+ *
+ * A surface that sits on the page is separated by its colour, not by a drop shadow. The
+ * surface-container roles in [SpliitPalette.scheme] do that work: as a container rises it takes
+ * a brighter tint (in light) or a lighter neutral (in dark), so a card, the tab track and the
+ * background read as three levels without a single blurred edge. Cards, rows, bars and the undo
+ * snackbar are all flat for this reason.
+ *
+ * A shadow is spent only where something really does float over the page and the user is meant
+ * to see the gap: a menu, the pills that fly out of the add button, and the snackbar. The FAB
+ * keeps Material's own shadow. Those are the numbers below; keep them few.
+ */
+object SpliitElevation {
+    /** Menus and other anchored popups above the page. */
+    val Menu = 6.dp
+
+    /** The action pills a FAB menu unfolds. Lighter: they are small and near their button. */
+    val FloatingAction = 4.dp
+
+    /** The undo bar, the one bar that briefly covers the content. */
+    val Bar = 4.dp
+}
 
 /**
  * Text styles the port needs by name.
