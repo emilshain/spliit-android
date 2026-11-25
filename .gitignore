@@ -30,3 +30,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local machine's run loop
+/run-local.sh
+/run-local.cmd
+
+# Gradle build output
+/dist/

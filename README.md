@@ -120,6 +120,68 @@ normal for a sideloaded APK.
   reachable from the debug build alone (see [`docs/LOCAL_TESTING.md`](docs/LOCAL_TESTING.md)), so
   use `spliit-0.1.0-debug.apk` for that.
 
+## Run it on the emulator
+
+The whole loop is scripted in the git-ignored `run-local.sh` — `bash run-local.sh` reuses a
+fake server and emulator if they are already up, otherwise starts them, then rebuilds,
+replaces the installed APK and launches the app. The manual equivalent follows; it assumes
+this workspace's toolchain (`../.tooling`), an AVD named `spliit_api30`, and a fake Spliit
+instance built from the test fixtures. It starts the emulator with a window so the screens
+can be used by hand; details and gotchas are in [`docs/LOCAL_TESTING.md`](docs/LOCAL_TESTING.md).
+
+```sh
+export JAVA_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/jdk21"
+export ANDROID_HOME="C:/Users/EmilShain/Code/spliit-workspace/.tooling/sdk"
+export MSYS_NO_PATHCONV=1
+ADB="$ANDROID_HOME/platform-tools/adb.exe"
+```
+
+**1. Emulator** (leave running in its own shell):
+
+```sh
+"$ANDROID_HOME/emulator/emulator.exe" -avd spliit_api30 -no-audio -no-boot-anim \
+  -no-snapshot -gpu swiftshader_indirect -port 5554
+
+"$ADB" -s emulator-5554 wait-for-device
+"$ADB" -s emulator-5554 shell getprop sys.boot_completed   # 1 when ready
+```
+
+**2. Fake backend** (its own shell; use Node, not Bun):
+
+```sh
+node tools/fake-spliit/server.mjs     # http://0.0.0.0:8790
+```
+
+**3. Build, install, launch** — the loop to repeat after every code change:
+
+```sh
+./gradlew :app:assembleDebug
+"$ADB" -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+"$ADB" -s emulator-5554 shell am force-stop app.spliit
+"$ADB" -s emulator-5554 shell am start -n app.spliit/.MainActivity
+```
+
+On a first launch, add the group by link with
+`http://10.0.2.2:8790/groups/sh__QL0eGqn-fw98LhAtW`.
+
+**4. Look at the screen:**
+
+```sh
+"$ADB" -s emulator-5554 exec-out screencap -p > shot.png
+```
+
+**5. Tap / type on it** (bounds come from the UI dump):
+
+```sh
+"$ADB" -s emulator-5554 shell uiautomator dump /sdcard/ui.xml
+"$ADB" -s emulator-5554 shell cat /sdcard/ui.xml
+"$ADB" -s emulator-5554 shell input tap <x> <y>
+"$ADB" -s emulator-5554 shell input text "hello"
+```
+
+If a screen keeps failing against the fake instance, the OkHttp pool is holding a dead
+connection from a server restart: `am force-stop app.spliit` and relaunch.
+
 ## Testing
 
 ```sh
