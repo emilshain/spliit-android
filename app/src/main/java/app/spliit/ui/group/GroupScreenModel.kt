@@ -15,6 +15,7 @@ import app.spliit.data.model.Group
 import app.spliit.data.model.GroupStatsResponse
 import app.spliit.data.model.Participant
 import app.spliit.data.model.Reimbursement
+import app.spliit.data.remote.GroupFormValues
 import app.spliit.data.remote.SpliitApi
 import app.spliit.data.remote.TrpcClient
 import app.spliit.data.remote.TrpcServerException
@@ -22,6 +23,7 @@ import app.spliit.data.remote.groupStats
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.DateHeading
 import app.spliit.domain.CategorySpending
+import app.spliit.domain.GroupExport
 import app.spliit.domain.MoneyFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -170,6 +172,30 @@ class GroupScreenModel(
      * view of the same expenses and would otherwise still show the old title, and the activity
      * log, which has just gained the line describing the change.
      */
+    /**
+     * Saves the group's own facts, then re-reads the group so the screen shows what was stored.
+     *
+     * Throws when the instance refuses, which is what the settings form puts in front of the user.
+     */
+    suspend fun updateGroup(values: GroupFormValues) {
+        val current = client ?: return
+        current.call(SpliitApi.updateGroup(groupId, values, actorId))
+        // The stored name is what the group list shows, so a rename has to reach it.
+        container.recentGroups.remember(
+            RecentGroup(
+                groupId = groupId,
+                groupName = values.name,
+                instanceURL = current.baseUrl,
+            ),
+        )
+        loadGroup(current)
+        reloadAfterExpenseChangeNow()
+    }
+
+    /** The group's expenses as the instance exports them: the web app's export button, in code. */
+    suspend fun exportCsv(): String =
+        container.clientForGroup(groupId).text(GroupExport.csvPath(groupId))
+
     fun reloadAfterExpenseChange() {
         scope.launch { reloadAfterExpenseChangeNow() }
     }
@@ -744,6 +770,17 @@ class GroupScreenModel(
             deletionJob = null
             commitPendingDeletion()
         }
+    }
+
+    /**
+     * The same delete, for a screen that has an expense's identity rather than the row it came
+     * from: the expense detail knows everything about one expense except where it sat.
+     */
+    fun requestDelete(expenseId: String) {
+        val item = expenses.firstOrNull { it.id == expenseId }
+            ?: searchResults.firstOrNull { it.id == expenseId }
+            ?: return
+        requestDelete(item)
     }
 
     /** Puts the row back where it was. Nothing was ever sent, so nothing needs undoing. */

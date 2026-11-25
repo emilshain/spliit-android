@@ -39,7 +39,7 @@ class CreateGroupSheetTest {
                     container = container,
                     defaultInstanceUrl = "https://spliit.app",
                     onDismiss = {},
-                    onCreated = { created = true },
+                    onSaved = { created = true },
                 )
             }
         }

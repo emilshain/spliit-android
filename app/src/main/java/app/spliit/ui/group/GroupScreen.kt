@@ -6,7 +6,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,19 +35,27 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -60,6 +71,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,8 +84,14 @@ import app.spliit.data.local.RecentGroup
 import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.Group
 import app.spliit.data.model.Reimbursement
+import app.spliit.data.remote.DeleteGroupInput
+import app.spliit.data.remote.SpliitApi
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
+import app.spliit.domain.GroupExport
+import app.spliit.domain.GroupFormDraft
+import app.spliit.domain.GroupLink
+import app.spliit.domain.ParticipantDraft
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.activity.ActivityTab
 import app.spliit.ui.balances.BalancesTab
@@ -80,15 +99,16 @@ import app.spliit.ui.expenses.ExpenseDetailScreen
 import app.spliit.ui.expenses.ExpenseFormSheet
 import app.spliit.ui.expenses.ExpenseListTab
 import app.spliit.ui.groups.ActiveUserPickerSheet
+import app.spliit.ui.groups.CurrencyPickerDialog
 import app.spliit.ui.search.ExpenseSearchTab
 import app.spliit.ui.settlements.SettlementsScreen
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
-import app.spliit.ui.theme.Monogram
-import app.spliit.ui.theme.MonogramPalette
+import app.spliit.ui.theme.ParticipantDot
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.totals.TotalsTab
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -100,7 +120,7 @@ import kotlin.random.Random
 private val GroupTabs = listOf("Expenses", "Balances", "Totals", "Activity")
 
 /** Where the group screen is, when it isn't showing a tab. */
-private enum class GroupDestination { TABS, SEARCH, INFORMATION, DETAIL, SETTLEMENTS }
+private enum class GroupDestination { TABS, SEARCH, SETTINGS, DETAIL, SETTLEMENTS }
 
 /**
  * A group: its expenses, its balances, what it has spent, its notes, and who the person holding
@@ -118,11 +138,17 @@ fun GroupScreen(
 ) {
     val scope = rememberCoroutineScope()
     val model = remember(container, groupId) { GroupScreenModel(container, groupId, scope) }
-    var tabIndex by remember { mutableStateOf(0) }
+    // One pager for the four tabs: tapping and swiping move the same state, so the pill has one
+    // position to follow rather than two that could disagree.
+    val pagerState = rememberPagerState(pageCount = { GroupTabs.size })
     var destination by remember { mutableStateOf(GroupDestination.TABS) }
     var query by remember { mutableStateOf("") }
     var sheet by remember { mutableStateOf<ExpenseFormPresentation?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
+    var shareOpen by remember { mutableStateOf(false) }
+    var confirmDeleteGroup by remember { mutableStateOf(false) }
+    var isDeletingGroup by remember { mutableStateOf(false) }
+    var deleteGroupFailure by remember { mutableStateOf<String?>(null) }
     var detailId by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<ExpenseDetails?>(null) }
     var detailFailure by remember { mutableStateOf<String?>(null) }
@@ -176,13 +202,14 @@ fun GroupScreen(
         loadDetail(id)
     }
 
-    if (destination == GroupDestination.INFORMATION) {
-        InformationScreen(
+    if (destination == GroupDestination.SETTINGS) {
+        SettingsScreen(
             group = group,
             model = model,
             stored = stored,
             onBack = { destination = GroupDestination.TABS },
             onIdentify = { pickerOpen = true },
+            onDeleteGroup = { confirmDeleteGroup = true },
         )
     } else if (destination == GroupDestination.DETAIL) {
         ExpenseDetailScreen(
@@ -204,6 +231,12 @@ fun GroupScreen(
                         mintedId = editing.id,
                     )
                 }
+            },
+            // Deleting from here is the list's delete: the row leaves the list and the undo
+            // window it already had is the way back.
+            onDelete = {
+                detailId?.let { model.requestDelete(it) }
+                destination = GroupDestination.TABS
             },
         )
     } else if (destination == GroupDestination.SETTLEMENTS) {
@@ -274,10 +307,16 @@ fun GroupScreen(
                     },
                     actions = {
                         // The group's own facts live one step in, behind a gear: the log took the
-                        // fourth tab.
+                        // fourth tab. The link sits beside it, because handing the group to
+                        // somebody is what a group is for.
+                        if (destination == GroupDestination.TABS && group != null) {
+                            IconButton(onClick = { shareOpen = true }) {
+                                Icon(Icons.Filled.Share, contentDescription = "Share group")
+                            }
+                        }
                         if (destination == GroupDestination.TABS) {
-                            IconButton(onClick = { destination = GroupDestination.INFORMATION }) {
-                                Icon(Icons.Filled.Settings, contentDescription = "Information")
+                            IconButton(onClick = { destination = GroupDestination.SETTINGS }) {
+                                Icon(Icons.Filled.Settings, contentDescription = "Settings")
                             }
                         }
                     },
@@ -329,76 +368,67 @@ fun GroupScreen(
                                 // The pages run under the tab bar: a list that stops at the bar
                                 // looks cut off rather than scrolled.
                                 GroupPillTabs(
-                                    selected = tabIndex,
-                                    onSelect = { tabIndex = it },
+                                    selected = pagerState.currentPage,
+                                    // The pill rides the page as it is dragged, instead of
+                                    // waiting for it to settle and then catching up.
+                                    position = pagerState.currentPage +
+                                        pagerState.currentPageOffsetFraction,
+                                    onSelect = { page ->
+                                        scope.launch { pagerState.animateScrollToPage(page) }
+                                    },
                                     modifier = Modifier
                                         .align(Alignment.TopCenter)
                                         .zIndex(1f),
                                 )
 
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    // Only the page moves: the tab row above it has already
-                                    // answered the finger, and sliding it too would read as the
-                                    // whole screen jumping.
-                                    AnimatedContent(
-                                        targetState = tabIndex,
-                                        transitionSpec = {
-                                            val forward = targetState > initialState
-                                            val spec = SpliitMotion.spatialDefault<IntOffset>()
-                                            (slideInHorizontally(spec) { width ->
-                                                val shift = width / 12
-                                                if (forward) shift else -shift
-                                            } + fadeIn(SpliitMotion.effectsDefault())) togetherWith
-                                                (slideOutHorizontally(spec) { width ->
-                                                    val shift = width / 12
-                                                    if (forward) -shift else shift
-                                                } + fadeOut(SpliitMotion.effectsFast()))
-                                        },
-                                        label = "tab page",
-                                    ) { page ->
-                                        when (page) {
-                                            0 -> ExpenseListTab(
-                                                model = model,
-                                                onAdd = {
-                                                    sheet = createPresentation(group, model, stored)
-                                                },
-                                                onEdit = openDetail,
-                                                onSearch = {
-                                                    destination = GroupDestination.SEARCH
-                                                },
-                                            )
+                                // The pages themselves are the gesture: a swipe moves one page
+                                // across, and the row above answers before the page settles.
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize(),
+                                ) { page ->
+                                    when (page) {
+                                        0 -> ExpenseListTab(
+                                            model = model,
+                                            onAdd = {
+                                                sheet = createPresentation(group, model, stored)
+                                            },
+                                            onEdit = openDetail,
+                                            onSearch = {
+                                                destination = GroupDestination.SEARCH
+                                            },
+                                        )
 
-                                            1 -> BalancesTab(
-                                                model = model,
-                                                identity = identity,
-                                                identityIsNobody = stored?.activeParticipant ==
-                                                    ActiveParticipant.Nobody,
-                                                onIdentify = { pickerOpen = true },
-                                                onOpenSettlements = {
-                                                    destination = GroupDestination.SETTLEMENTS
-                                                },
-                                                onSettle = { reimbursement ->
-                                                    sheet = settlePresentation(
-                                                        reimbursement,
-                                                        group,
-                                                        model,
-                                                    )
-                                                },
-                                            )
+                                        1 -> BalancesTab(
+                                            model = model,
+                                            identity = identity,
+                                            identityIsNobody = stored?.activeParticipant ==
+                                                ActiveParticipant.Nobody,
+                                            onIdentify = { pickerOpen = true },
+                                            onOpenSettlements = {
+                                                destination = GroupDestination.SETTLEMENTS
+                                            },
+                                            onSettle = { reimbursement ->
+                                                sheet = settlePresentation(
+                                                    reimbursement,
+                                                    group,
+                                                    model,
+                                                )
+                                            },
+                                        )
 
-                                            2 -> TotalsTab(
-                                                model = model,
-                                                identity = identity,
-                                                identityIsNobody = stored?.activeParticipant ==
-                                                    ActiveParticipant.Nobody,
-                                                onIdentify = { pickerOpen = true },
-                                            )
+                                        2 -> TotalsTab(
+                                            model = model,
+                                            identity = identity,
+                                            identityIsNobody = stored?.activeParticipant ==
+                                                ActiveParticipant.Nobody,
+                                            onIdentify = { pickerOpen = true },
+                                        )
 
-                                            else -> ActivityTab(
-                                                model = model,
-                                                onEdit = openExpense,
-                                            )
-                                        }
+                                        else -> ActivityTab(
+                                            model = model,
+                                            onEdit = openExpense,
+                                        )
                                     }
                                 }
                             }
@@ -431,6 +461,84 @@ fun GroupScreen(
         )
     }
 
+    if (confirmDeleteGroup && group != null) {
+        val current = group
+        AlertDialog(
+            onDismissRequest = { if (!isDeletingGroup) confirmDeleteGroup = false },
+            title = { Text("Delete this group?") },
+            text = {
+                Text(
+                    "“${current.name}” and its expenses will be scheduled for deletion, and " +
+                        "anyone holding its link will lose access.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeletingGroup,
+                    onClick = {
+                        isDeletingGroup = true
+                        scope.launch {
+                            try {
+                                container.clientForGroup(groupId).call(
+                                    SpliitApi.deleteGroup(
+                                        DeleteGroupInput(
+                                            groupId = groupId,
+                                            groupName = current.name,
+                                            participantId = model.actorId,
+                                        ),
+                                    ),
+                                )
+                                container.recentGroups.forget(groupId)
+                                confirmDeleteGroup = false
+                                onBack()
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                deleteGroupFailure =
+                                    error.localizedMessage ?: "Couldn’t delete the group."
+                            } finally {
+                                isDeletingGroup = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(
+                        text = if (isDeletingGroup) "Deleting…" else "Delete",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isDeletingGroup,
+                    onClick = { confirmDeleteGroup = false },
+                ) { Text("Cancel") }
+            },
+        )
+    }
+
+    deleteGroupFailure?.let { message ->
+        AlertDialog(
+            onDismissRequest = { deleteGroupFailure = null },
+            title = { Text("Couldn’t delete the group") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { deleteGroupFailure = null }) { Text("OK") }
+            },
+        )
+    }
+
+    if (shareOpen && group != null) {
+        GroupShareSheet(
+            groupName = group.name,
+            url = GroupLink.shareUrl(
+                groupId = groupId,
+                instanceUrl = model.instanceUrl ?: ServerInstance.DEFAULT_BASE_URL,
+            ),
+            onDismiss = { shareOpen = false },
+        )
+    }
+
     if (pickerOpen && group != null) {
         ActiveUserPickerSheet(
             group = group,
@@ -456,15 +564,10 @@ fun GroupScreen(
 @Composable
 private fun GroupPillTabs(
     selected: Int,
+    position: Float,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val position by animateFloatAsState(
-        targetValue = selected.toFloat(),
-        animationSpec = SpliitMotion.spatialDefault(),
-        label = "tab pill",
-    )
-
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -579,12 +682,13 @@ private fun identityOf(
 /** The group's own facts, one step in from the gear in the toolbar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InformationScreen(
+private fun SettingsScreen(
     group: Group?,
     model: GroupScreenModel,
     stored: RecentGroup?,
     onBack: () -> Unit,
     onIdentify: () -> Unit,
+    onDeleteGroup: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -592,7 +696,7 @@ private fun InformationScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
-                title = { Text("Information") },
+                title = { Text("Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -607,11 +711,12 @@ private fun InformationScreen(
                     CircularProgressIndicator()
                 }
             } else {
-                InformationTab(
+                SettingsTab(
                     group = group,
                     model = model,
                     stored = stored,
                     onIdentify = onIdentify,
+                    onDeleteGroup = onDeleteGroup,
                 )
             }
         }
@@ -619,62 +724,248 @@ private fun InformationScreen(
 }
 
 /**
- * The identity a new expense starts from, and the group's own facts.
+ * The group's own facts, the identity a new expense starts from, and the two things that change
+ * the group itself rather than anything in it.
  */
 @Composable
-private fun InformationTab(
+private fun SettingsTab(
     group: Group,
     model: GroupScreenModel,
     stored: RecentGroup?,
     onIdentify: () -> Unit,
+    onDeleteGroup: () -> Unit,
 ) {
     val identity = identityOf(stored, group)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isExporting by remember { mutableStateOf(false) }
+    var exportFailure by remember { mutableStateOf<String?>(null) }
+    // The file waits here between the tap and the moment a place to put it is chosen.
+    var pendingCsv by remember { mutableStateOf<String?>(null) }
+
+    // The group's own facts, edited where they are read: the fields are the screen.
+    var draft by remember(group.id) { mutableStateOf(GroupFormDraft.editing(group)) }
+    var hasAttemptedSave by remember(group.id) { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveFailure by remember { mutableStateOf<String?>(null) }
+    var showCurrencyPicker by remember { mutableStateOf(false) }
+    val isDirty = draft != GroupFormDraft.editing(group)
+
+    fun save() {
+        hasAttemptedSave = true
+        if (!draft.isValid || !isDirty || isSaving) return
+        isSaving = true
+        saveFailure = null
+        scope.launch {
+            try {
+                model.updateGroup(draft.formValues)
+                draft = GroupFormDraft.editing(model.group ?: group)
+                hasAttemptedSave = false
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                saveFailure = error.localizedMessage ?: "Couldn’t save the group."
+            } finally {
+                isSaving = false
+            }
+        }
+    }
+
+    val createCsv = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv"),
+    ) { uri ->
+        val csv = pendingCsv
+        pendingCsv = null
+        if (uri == null || csv == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { stream ->
+                stream.write(csv.toByteArray(Charsets.UTF_8))
+            } ?: error("The chosen file could not be opened.")
+        }.onFailure { error ->
+            exportFailure = error.localizedMessage ?: "Couldn’t write the file."
+        }
+    }
+
+    fun exportCsv() {
+        if (isExporting) return
+        isExporting = true
+        scope.launch {
+            try {
+                val csv = model.exportCsv()
+                pendingCsv = csv
+                createCsv.launch(GroupExport.fileName(group.name))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                exportFailure = error.localizedMessage ?: "Couldn’t export the expenses."
+            } finally {
+                isExporting = false
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (!group.information.isNullOrBlank()) {
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             Card {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Notes", style = SpliitType.SectionHeader)
-                    Text(group.information)
-                }
-            }
-        }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Group", style = SpliitType.SectionHeader)
+                        Spacer(Modifier.weight(1f))
+                        if (isDirty) {
+                            TextButton(
+                                enabled = !isSaving,
+                                onClick = {
+                                    draft = GroupFormDraft.editing(group)
+                                    hasAttemptedSave = false
+                                },
+                            ) { Text("Reset") }
+                        }
+                        Button(onClick = { save() }, enabled = isDirty && !isSaving) {
+                            Text(if (isSaving) "Saving…" else "Save")
+                        }
+                    }
 
-        Card {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Participants", style = SpliitType.SectionHeader)
-                group.participants.forEachIndexed { position, participant ->
+                    OutlinedTextField(
+                        value = draft.name,
+                        onValueChange = { draft = draft.copy(name = it) },
+                        label = { Text("Group name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (hasAttemptedSave) {
+                        draft.problems.firstOrNull {
+                            it is GroupFormDraft.Problem.NameTooShort ||
+                                it is GroupFormDraft.Problem.NameTooLong
+                        }?.let { FieldProblem(it.message) }
+                    }
+
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showCurrencyPicker = true }
+                            .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Monogram(
-                            name = participant.name,
-                            colorIndex = MonogramPalette.indexAtPosition(position),
-                            size = 28.dp,
+                        Text("Currency", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = settingsCurrencySummary(draft),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(participant.name)
+                        Icon(
+                            Icons.Filled.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (draft.usesCustomSymbol) {
+                        OutlinedTextField(
+                            value = draft.currency,
+                            onValueChange = { draft = draft.copy(currency = it) },
+                            label = { Text("Currency symbol") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (hasAttemptedSave) {
+                            draft.problems.firstOrNull {
+                                it is GroupFormDraft.Problem.CurrencyMissing ||
+                                    it is GroupFormDraft.Problem.CurrencyTooLong
+                            }?.let { FieldProblem(it.message) }
+                        }
+                    }
+                    if (
+                        hasAttemptedSave &&
+                        draft.problems.contains(GroupFormDraft.Problem.CurrencyCodeInvalid)
+                    ) {
+                        FieldProblem(GroupFormDraft.Problem.CurrencyCodeInvalid.message)
+                    }
+
+                    OutlinedTextField(
+                        value = draft.information,
+                        onValueChange = { draft = draft.copy(information = it) },
+                        label = { Text("Notes") },
+                        minLines = 2,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Text("Participants", style = SpliitType.SectionHeader)
+                    draft.participants.forEachIndexed { index, participant ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                ParticipantDot(position = index, size = 9.dp)
+                                OutlinedTextField(
+                                    value = participant.name,
+                                    onValueChange = { newName ->
+                                        draft = draft.copy(
+                                            participants = draft.participants.map {
+                                                if (it.id == participant.id) {
+                                                    it.copy(name = newName)
+                                                } else {
+                                                    it
+                                                }
+                                            },
+                                        )
+                                    },
+                                    label = { Text("Name") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButton(
+                                    onClick = {
+                                        draft = draft.copy(
+                                            participants = draft.participants.filterNot {
+                                                it.id == participant.id
+                                            },
+                                        )
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = "Remove participant",
+                                    )
+                                }
+                            }
+                            if (hasAttemptedSave) {
+                                draft.problemsForParticipant(participant.id).firstOrNull()
+                                    ?.let { FieldProblem(it.message) }
+                            }
+                        }
+                    }
+                    if (hasAttemptedSave &&
+                        draft.problems.contains(GroupFormDraft.Problem.NoParticipants)
+                    ) {
+                        FieldProblem(GroupFormDraft.Problem.NoParticipants.message)
+                    }
+                    TextButton(
+                        onClick = {
+                            draft = draft.copy(
+                                participants = draft.participants + ParticipantDraft(),
+                            )
+                        },
+                    ) {
+                        Icon(Icons.Filled.PersonAdd, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add participant")
                     }
                 }
             }
-        }
 
-        Card {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Group", style = SpliitType.SectionHeader)
-                Fact("Currency", currencyLabel(group))
-                Fact("Created", dateLabel(group.createdAt))
-                model.instanceUrl?.let { Fact("Server", ServerInstance.displayName(it)) }
+            Card {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Fact("Created", dateLabel(group.createdAt))
+                    model.instanceUrl?.let { Fact("Server", ServerInstance.displayName(it)) }
+                }
             }
-        }
 
-        // The question the balances tab needs answered, offered beside the answer it unlocks.
         Card {
             Row(
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onIdentify),
@@ -699,6 +990,144 @@ private fun InformationTab(
                 )
             }
         }
+
+        Card {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Manage", style = SpliitType.SectionHeader)
+                SettingsAction(
+                    title = "Export as CSV",
+                    subtitle = if (isExporting) {
+                        "Preparing the file…"
+                    } else {
+                        "Every expense, one row each, one column per participant"
+                    },
+                    icon = Icons.Filled.FileDownload,
+                    busy = isExporting,
+                    onClick = { exportCsv() },
+                )
+                SettingsAction(
+                    title = "Delete group",
+                    subtitle = "Scheduled for deletion, with its expenses",
+                    icon = Icons.Filled.Delete,
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onDeleteGroup,
+                )
+            }
+        }
+    }
+
+    if (showCurrencyPicker) {
+        CurrencyPickerDialog(
+            selectedCode = draft.currencyCode,
+            onPick = { currency ->
+                draft = if (currency == null) draft.useCustomSymbol() else draft.use(currency)
+                showCurrencyPicker = false
+            },
+            onDismiss = { showCurrencyPicker = false },
+        )
+    }
+
+    saveFailure?.let { message ->
+        MessageDialog(
+            title = "Couldn’t save the group",
+            message = message,
+            onDismiss = { saveFailure = null },
+        )
+    }
+
+    exportFailure?.let { message ->
+        MessageDialog(
+            title = "Couldn’t export the expenses",
+            message = message,
+            onDismiss = { exportFailure = null },
+        )
+    }
+}
+
+/** One thing a settings screen can *do*, as opposed to read. */
+@Composable
+private fun SettingsAction(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    tint: Color = Color.Unspecified,
+    busy: Boolean = false,
+) {
+    val destructive = tint != Color.Unspecified
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (destructive) tint else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = SpliitType.RowTitle,
+                color = if (destructive) tint else MaterialTheme.colorScheme.onSurface,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = SpliitType.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageDialog(title: String, message: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("OK") }
+        },
+    )
+}
+
+/** A problem with one field, under it and only after a save was attempted. */
+@Composable
+private fun FieldProblem(text: String) {
+    Text(
+        text = text,
+        style = SpliitType.Secondary,
+        color = MaterialTheme.colorScheme.error,
+    )
+}
+
+/** What the currency row shows on the right: the name and symbol, or the symbol alone. */
+private fun settingsCurrencySummary(draft: GroupFormDraft): String {
+    val currency = draft.selectedCurrency()
+    return when {
+        currency != null -> "${currency.name} (${currency.symbol})"
+        !draft.currencyCode.isNullOrEmpty() -> draft.currencyCode!!
+        else -> draft.currency
     }
 }
 
@@ -726,9 +1155,6 @@ private fun Fact(label: String, value: String) {
         Text(text = value)
     }
 }
-
-private fun currencyLabel(group: Group): String =
-    group.currencyCode?.let { "${group.currency} ($it)" } ?: group.currency
 
 private fun dateLabel(instant: Instant): String =
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)

@@ -4,22 +4,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,12 +24,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
 import app.spliit.data.local.RecentGroup
+import app.spliit.data.model.Group
 import app.spliit.data.remote.SpliitApi
 import app.spliit.domain.CurrencyCatalog
 import app.spliit.domain.CurrencyInfo
@@ -50,14 +48,18 @@ import app.spliit.domain.GroupFormDraft
 import app.spliit.domain.InstanceChoice
 import app.spliit.domain.ParticipantDraft
 import app.spliit.domain.ServerInstance
+import app.spliit.ui.theme.ExpandChevron
+import app.spliit.ui.theme.ExpressiveMenu
+import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.ParticipantDot
 import app.spliit.ui.theme.SpliitType
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
- * "Create group", presented as a sheet from the group list.
+ * The group form, presented as a sheet: a new group from the group list, or an existing one from
+ * its settings.
  *
  * Errors only appear once a save has been attempted — a form that is red before you have typed
  * anything reads as broken rather than helpful.
@@ -67,15 +69,27 @@ import java.util.Locale
 fun CreateGroupSheet(
     container: AppContainer,
     defaultInstanceUrl: String,
+    /** The group being edited, or null when this sheet is making a new one. */
+    editing: Group? = null,
+    /** Where [editing] lives. A group never moves between servers, so it is not asked for. */
+    editingInstanceUrl: String? = null,
+    /** Who to credit in the activity log. */
+    actorId: String? = null,
     onDismiss: () -> Unit,
-    onCreated: (RecentGroup) -> Unit,
+    onSaved: (RecentGroup) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val editingGroup = editing
+    val isEditing = editingGroup != null
 
-    var draft by remember { mutableStateOf(GroupFormDraft.newGroup()) }
+    var draft by remember(editingGroup?.id) {
+        mutableStateOf(editingGroup?.let { GroupFormDraft.editing(it) } ?: GroupFormDraft.newGroup())
+    }
     // Where the form opens: the last instance a group was deliberately created on.
-    var instance by remember { mutableStateOf(InstanceChoice(url = defaultInstanceUrl)) }
+    var instance by remember {
+        mutableStateOf(InstanceChoice(url = editingInstanceUrl ?: defaultInstanceUrl))
+    }
     var knownInstances by remember { mutableStateOf(listOf(defaultInstanceUrl)) }
     var hasAttemptedSave by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
@@ -89,26 +103,40 @@ fun CreateGroupSheet(
 
     fun save() {
         hasAttemptedSave = true
-        if (!draft.isValid || !instance.isValid || isSaving) return
-        val instanceUrl = instance.resolved ?: return
+        val instanceUrl = editingInstanceUrl?.takeIf { isEditing } ?: instance.resolved
+        if (!draft.isValid || instanceUrl == null || isSaving) return
+        if (!isEditing && !instance.isValid) return
 
         isSaving = true
         scope.launch {
             try {
                 val values = draft.formValues
-                val response = container.client(instanceUrl).call(SpliitApi.createGroup(values))
-                container.noteInstanceUsedForNewGroup(instanceUrl)
+                val groupId = if (editingGroup != null) {
+                    container.client(instanceUrl).call(
+                        SpliitApi.updateGroup(editingGroup.id, values, actorId),
+                    )
+                    editingGroup.id
+                } else {
+                    val response = container.client(instanceUrl).call(SpliitApi.createGroup(values))
+                    container.noteInstanceUsedForNewGroup(instanceUrl)
+                    response.groupId
+                }
+                // The stored name is what the group list shows, so a rename has to reach it.
                 val group = RecentGroup(
-                    groupId = response.groupId,
+                    groupId = groupId,
                     groupName = values.name,
                     instanceURL = instanceUrl,
                 )
                 container.recentGroups.remember(group)
-                onCreated(group)
+                onSaved(group)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                failure = error.localizedMessage ?: "Couldn’t create the group."
+                failure = error.localizedMessage ?: if (isEditing) {
+                    "Couldn’t save the group."
+                } else {
+                    "Couldn’t create the group."
+                }
             } finally {
                 isSaving = false
             }
@@ -123,10 +151,20 @@ fun CreateGroupSheet(
             ) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
                 Spacer(Modifier.weight(1f))
-                Text("Create group", style = SpliitType.RowTitle)
+                Text(
+                    if (isEditing) "Edit group" else "Create group",
+                    style = SpliitType.RowTitle,
+                )
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { save() }, enabled = !isSaving) {
-                    Text(if (isSaving) "Creating…" else "Create")
+                    Text(
+                        when {
+                            isSaving && isEditing -> "Saving…"
+                            isSaving -> "Creating…"
+                            isEditing -> "Save"
+                            else -> "Create"
+                        },
+                    )
                 }
             }
 
@@ -167,11 +205,7 @@ fun CreateGroupSheet(
                         text = currencySummary(draft),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Icon(
-                        Icons.Filled.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    ExpandChevron(expanded = showCurrencyPicker)
                 }
 
                 // Only when there is no currency to derive it from. A symbol that disagreed with
@@ -195,86 +229,84 @@ fun CreateGroupSheet(
                 if (hasAttemptedSave && draft.problems.contains(GroupFormDraft.Problem.CurrencyCodeInvalid)) {
                     FieldError(GroupFormDraft.Problem.CurrencyCodeInvalid.message)
                 }
-                FormFooter(
-                    if (draft.usesCustomSymbol) {
-                        "The currency symbol is shown next to every amount, for example $ or CHF."
-                    } else {
-                        "Amounts in this group are shown with this currency’s symbol."
-                    },
-                )
 
-                // The server a group is created on. A group cannot move between servers, so the
-                // address is only ever chosen once.
-                FormHeader("Server")
+                if (!isEditing) {
+                    // The server a group is created on. A group cannot move between servers, so the
+                    // address is only ever chosen once.
+                    FormHeader("Server")
 
-                Box {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { serverMenuOpen = true }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("Server", style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            text = if (instance.isTypingAddress) {
-                                "Other server"
-                            } else {
-                                ServerInstance.displayName(instance.url)
-                            },
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Icon(
-                            Icons.Filled.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { serverMenuOpen = true }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Server", style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = if (instance.isTypingAddress) {
+                                    "Other server"
+                                } else {
+                                    ServerInstance.displayName(instance.url)
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            ExpandChevron(expanded = serverMenuOpen)
+                        }
 
-                    DropdownMenu(expanded = serverMenuOpen, onDismissRequest = { serverMenuOpen = false }) {
-                        knownInstances.forEach { url ->
-                            DropdownMenuItem(
-                                text = { Text(ServerInstance.displayName(url)) },
+                        ExpressiveMenu(
+                            expanded = serverMenuOpen,
+                            onDismissRequest = { serverMenuOpen = false },
+                            minWidth = 230.dp,
+                        ) {
+                            knownInstances.forEach { url ->
+                                ExpressiveMenuItem(
+                                    text = ServerInstance.displayName(url),
+                                    selected = !instance.isTypingAddress &&
+                                        instance.url == url,
+                                    onClick = {
+                                        serverMenuOpen = false
+                                        instance = instance.use(url)
+                                    },
+                                )
+                            }
+                            ExpressiveMenuItem(
+                                text = "Other server",
+                                selected = instance.isTypingAddress,
                                 onClick = {
                                     serverMenuOpen = false
-                                    instance = instance.use(url)
+                                    instance = instance.typeAddress()
                                 },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text("Other server") },
-                            onClick = {
-                                serverMenuOpen = false
-                                instance = instance.typeAddress()
-                            },
-                        )
                     }
-                }
 
-                if (instance.isTypingAddress) {
-                    OutlinedTextField(
-                        value = instance.address,
-                        onValueChange = { instance = instance.copy(address = it) },
-                        label = { Text("spliit.example.com") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            autoCorrectEnabled = false,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (hasAttemptedSave && !instance.isValid) {
-                        FieldError(
-                            "That doesn’t look like a web address. Try something like " +
-                                "spliit.example.com.",
+                    if (instance.isTypingAddress) {
+                        OutlinedTextField(
+                            value = instance.address,
+                            onValueChange = { instance = instance.copy(address = it) },
+                            label = { Text("spliit.example.com") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                autoCorrectEnabled = false,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
                         )
+                        if (hasAttemptedSave && !instance.isValid) {
+                            FieldError(
+                                "That doesn’t look like a web address. Try something like " +
+                                    "spliit.example.com.",
+                            )
+                        }
                     }
+                    FormFooter(
+                        "Where this group is created. Groups on different Spliit servers sit in " +
+                            "the same list, and a group stays on the server it was made on.",
+                    )
                 }
-                FormFooter(
-                    "Where this group is created. Groups on different Spliit servers sit in " +
-                        "the same list, and a group stays on the server it was made on.",
-                )
 
                 FormHeader("Notes")
                 OutlinedTextField(
@@ -364,7 +396,9 @@ fun CreateGroupSheet(
     failure?.let { message ->
         AlertDialog(
             onDismissRequest = { failure = null },
-            title = { Text("Couldn’t create the group") },
+            title = {
+                Text(if (isEditing) "Couldn’t save the group" else "Couldn’t create the group")
+            },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { failure = null }) { Text("OK") }
@@ -454,21 +488,15 @@ internal fun CurrencyPickerDialog(
                         .heightIn(max = 360.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Custom symbol") },
+                    ExpressiveMenuItem(
+                        text = "Custom symbol",
+                        selected = selectedCode == null,
                         onClick = { onPick(null) },
                     )
                     matches.forEach { currency ->
-                        DropdownMenuItem(
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${currency.name} (${currency.symbol})")
-                                    if (currency.code == selectedCode) {
-                                        Spacer(Modifier.weight(1f))
-                                        Text("✓", color = MaterialTheme.colorScheme.primary)
-                                    }
-                                }
-                            },
+                        ExpressiveMenuItem(
+                            text = "${currency.name} (${currency.symbol})",
+                            selected = currency.code == selectedCode,
                             onClick = { onPick(currency) },
                         )
                     }

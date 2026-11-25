@@ -29,6 +29,16 @@ data class GroupLink(
     companion object {
 
         /**
+         * The link the web app's share dialog hands out, and the one this app shares in turn:
+         * the group, opened on its expenses, tagged so a server can tell a shared link apart.
+         *
+         * The instance is trimmed rather than normalised here — it is the address the group is
+         * already being read from, and a link that points somewhere else is a different group.
+         */
+        fun shareUrl(groupId: String, instanceUrl: String): String =
+            "${instanceUrl.trimEnd('/')}/groups/$groupId/expenses?ref=share"
+
+        /**
          * The group a URL names, or null for a URL that names none — and for anything that is
          * not an http(s) URL at all.
          *

@@ -65,6 +65,18 @@ object SpliitApi {
             TrpcVoidSerializer,
         )
 
+    /**
+     * Schedules the group for deletion. The server keeps it for a while first, which is what
+     * makes the web app's delete a thing you can change your mind about.
+     */
+    fun deleteGroup(input: DeleteGroupInput): TrpcProcedure<Unit> =
+        mutation(
+            "groups.delete",
+            input,
+            DeleteGroupInput.serializer(),
+            TrpcVoidSerializer,
+        )
+
     // MARK: - Expenses
 
     fun expenses(

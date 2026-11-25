@@ -146,6 +146,25 @@ class TrpcClient(
             )
         }
 
+    /**
+     * Reads a plain endpoint on the instance — the CSV export, not a tRPC procedure.
+     *
+     * The instance renders that file itself, so downloading it is how the app gets the same
+     * formatting the web app's export button does, without a second implementation to drift.
+     */
+    suspend fun text(path: String): String {
+        val builder = validatedBase.newBuilder()
+        val prefix = validatedBase.encodedPath.trimEnd('/')
+        builder.encodedPath(prefix + "/" + path.trimStart('/'))
+
+        val request = Request.Builder().url(builder.build()).get().build()
+        val (status, body) = execute(request)
+        if (status !in 200..299) {
+            throw TrpcClientException("The export could not be fetched ($status).")
+        }
+        return body
+    }
+
     companion object {
         /**
          * `OkHttpClient` default is 10 seconds, which a person reads as the app having hung.

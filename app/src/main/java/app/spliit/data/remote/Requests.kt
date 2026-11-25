@@ -45,6 +45,15 @@ data class UpdateGroupInput(
     val participantId: String? = null,
 )
 
+/** `groups.delete` schedules the group for deletion; the name is what the notice says. */
+@Serializable
+data class DeleteGroupInput(
+    val groupId: String,
+    val groupName: String,
+    /** Who asked, for the activity log; omitted when this phone has not said. */
+    val participantId: String? = null,
+)
+
 @Serializable
 data class ExpensesListInput(
     val groupId: String,
