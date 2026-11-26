@@ -887,9 +887,11 @@ private fun GroupPillTabs(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(50))
+                            // A tab is a choice in a contained track, not a button: the ripple
+                            // washing over the pill read as a press on glass. It dips instead.
                             .clickable(
                                 interactionSource = interaction,
-                                indication = LocalIndication.current,
+                                indication = null,
                             ) { onSelect(index) }
                             .pressScale(interaction, pressedScale = 0.94f),
                         contentAlignment = Alignment.Center,

@@ -8,6 +8,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Image
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -78,10 +79,12 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
+import app.spliit.R
 import app.spliit.data.local.AppearancePalette
 import app.spliit.data.local.RecentGroup
 import app.spliit.data.local.ThemeChoice
@@ -142,6 +145,15 @@ fun GroupsListScreen(
     val palette by container.appearance.palette.collectAsState(initial = AppearancePalette.Spliit)
 
     LaunchedEffect(model) { model.start() }
+
+    // A start with nothing on disk reads in a frame or two, and drawing a splash for it would be
+    // slower than the wait it hides. The mark appears only if the read is genuinely slow.
+    var slowStart by remember { mutableStateOf(false) }
+    LaunchedEffect(model.hasLoadedGroups) {
+        if (model.hasLoadedGroups) return@LaunchedEffect
+        delay(240)
+        slowStart = true
+    }
 
     Scaffold(
         topBar = {
@@ -225,7 +237,9 @@ fun GroupsListScreen(
         }
 
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (model.groups.isEmpty()) {
+            if (!model.hasLoadedGroups) {
+                StartupMark(visible = slowStart)
+            } else if (model.groups.isEmpty()) {
                 EmptyState(
                     art = EmptyStateArt.Logo,
                     title = "Welcome to Spliit",
@@ -314,6 +328,24 @@ fun GroupsListScreen(
 }
 
 private enum class GroupsSheet { None, Create, AddByLink }
+
+/** The mark alone, on the page background, for a start that is taking a moment. */
+@Composable
+private fun StartupMark(visible: Boolean) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(SpliitMotion.effectsDefault()),
+            exit = fadeOut(SpliitMotion.effectsFast()),
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_mark),
+                contentDescription = null,
+                modifier = Modifier.size(84.dp),
+            )
+        }
+    }
+}
 
 /**
  * The app's appearance, as a pick rather than a switch: System follows the phone, and Light or
@@ -976,6 +1008,15 @@ class GroupsListModel(
 ) {
     var groups by mutableStateOf<List<RecentGroup>>(emptyList())
         private set
+
+    /**
+     * The remembered list has been read at least once.
+     *
+     * Until then an empty list means "not read yet", not "no groups", and drawing the welcome
+     * screen for it is the flash this exists to stop.
+     */
+    var hasLoadedGroups by mutableStateOf(false)
+        private set
     // A visit's own counts, so coming back to the list shows them while the servers answer
     // again rather than a row of "…".
     var summaries by mutableStateOf(
@@ -994,6 +1035,7 @@ class GroupsListModel(
         scope.launch {
             container.recentGroups.groups.collect { remembered ->
                 groups = remembered
+                hasLoadedGroups = true
                 // Nobody asked for this one: the list on screen is already the answer, so the
                 // details behind it are fetched without a spinner over them.
                 refresh(showIndicator = false)

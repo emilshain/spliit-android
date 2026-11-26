@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -133,6 +135,9 @@ fun ExpressiveMenu(
                     min = minWidth,
                     max = (windowWidth - 32.dp).coerceAtLeast(180.dp),
                 )
+                // As wide as its widest row, not as wide as the popup allows. A menu is a list
+                // of short choices; without this the rows' fillMaxWidth makes it span the screen.
+                .width(IntrinsicSize.Max)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale

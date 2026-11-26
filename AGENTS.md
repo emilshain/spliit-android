@@ -194,6 +194,15 @@ How documents work, since the difference from "the app's database" matters:
 
 Both strips animate with `SpliitMotion` and use colour roles only, like every other screen.
 
+## Starting up
+
+The remembered group list is read from disk before anything is decided about it: until the
+first emission, `GroupsListModel.hasLoadedGroups` is false and the screen draws the background
+rather than the welcome empty state, so an existing install never sees "Welcome to Spliit" for a
+frame. A one-shot 240ms timer shows the brand mark (`drawable/ic_mark.xml`, generated from
+`spliit.svg`) only when the read is genuinely slow. Do not add a splash screen in front of a
+local read that takes milliseconds.
+
 ## Touch feedback
 
 Every clickable row, card, pill and button shows a ripple, and the cards additionally dip with
@@ -212,7 +221,9 @@ keeps Material's own shadow. Do not add `Modifier.shadow` to a card, row, bar or
 ## Menus
 
 Use `ExpressiveMenu` / `ExpressiveMenuItem` from `ui/theme/Menu.kt`; never a bare
-`DropdownMenu`. It is the M3 Expressive vertical menu: 16dp container, 48dp rows with an inset
+`DropdownMenu`. The menu sizes itself with `width(IntrinsicSize.Max)` so it is as wide as its
+widest row: rows carry `fillMaxWidth()`, and without the intrinsic width the popup would hand
+them the whole screen and every menu would span it. It is the M3 Expressive vertical menu: 16dp container, 48dp rows with an inset
 12dp selection pill, tonal `surfaceContainer` container, a shadow, and it sizes itself to its
 widest row up to the screen width. Mark the current choice with `selected = ...`.
 
