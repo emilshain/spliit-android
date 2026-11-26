@@ -200,7 +200,10 @@ The remembered group list is read from disk before anything is decided about it:
 first emission, `GroupsListModel.hasLoadedGroups` is false and the screen draws the background
 rather than the welcome empty state, so an existing install never sees "Welcome to Spliit" for a
 frame. A one-shot 240ms timer shows the brand mark (`drawable/ic_mark.xml`, generated from
-`spliit.svg`) only when the read is genuinely slow. Do not add a splash screen in front of a
+`spliit.svg`) only when the read is genuinely slow. The launcher icon is the artwork **with its
+plate** (`spliit-bg.svg`): the foreground carries the full 108dp square, the adaptive background is
+transparent, and the launcher's mask crops that square. The in-app mark is the transparent one,
+tinted with a colour role so it follows light and dark. Do not add a splash screen in front of a
 local read that takes milliseconds.
 
 ## Touch feedback

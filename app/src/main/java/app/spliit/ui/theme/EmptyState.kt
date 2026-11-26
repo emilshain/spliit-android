@@ -1,12 +1,12 @@
 package app.spliit.ui.theme
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -14,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.spliit.R
 
 /** The art above an empty state's title. */
 sealed interface EmptyStateArt {
@@ -89,14 +92,15 @@ fun EmptyState(
 @Composable
 private fun Artwork(art: EmptyStateArt) {
     when (art) {
-        // The wordmark, drawn rather than shipped as an asset: the reference draws the brand
-        // logo, and the brand is the word. Fixed size, as on iOS — chrome should not grow with
-        // Dynamic Type.
-        EmptyStateArt.Logo -> Text(
-            text = "Spliit",
-            style = SpliitType.Wordmark,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.heightIn(min = 60.dp),
+        // The mark itself, from the same artwork as the launcher icon but without its plate:
+        // tinted with the theme's accent so it reads in light mode and in dark, where the
+        // artwork's own green would sit too bright on the page. Fixed size, as on iOS: chrome
+        // should not grow with Dynamic Type.
+        EmptyStateArt.Logo -> Image(
+            painter = painterResource(R.drawable.ic_mark),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.size(96.dp),
         )
 
         is EmptyStateArt.Icon -> Box(
