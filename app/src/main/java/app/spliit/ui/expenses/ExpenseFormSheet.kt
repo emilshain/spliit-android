@@ -1,5 +1,12 @@
 package app.spliit.ui.expenses
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,28 +48,36 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
 import app.spliit.data.local.DefaultSplit
+import app.spliit.data.local.PendingExpense
 import app.spliit.data.model.ExpenseCategory
 import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.Group
 import app.spliit.data.model.SplitMode
 import app.spliit.data.remote.SpliitApi
+import app.spliit.data.remote.TrpcServerException
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.ParticipantShare
 import app.spliit.ui.theme.ExpandChevron
 import app.spliit.ui.theme.ExpressiveMenu
 import app.spliit.ui.theme.ExpressiveMenuItem
+import app.spliit.domain.ReceiptPhotos
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
 import app.spliit.ui.theme.SpliitType
+import java.io.File
+import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Creating and editing an expense — who paid, how much, and how it's divided.
@@ -98,11 +113,124 @@ fun ExpenseFormSheet(
     var failure by remember { mutableStateOf<String?>(null) }
     var datePickerOpen by remember { mutableStateOf(false) }
     var payerMenuOpen by remember { mutableStateOf(false) }
-    var categoryMenuOpen by remember { mutableStateOf(false) }
+    var uploadingReceipt by remember { mutableStateOf(false) }
+    var receiptFailure by remember { mutableStateOf<String?>(null) }
 
     val client = remember(instanceUrl) { container.client(instanceUrl) }
     val expenseId = editing?.id ?: mintedExpenseId
     val shares = if (draft.showsShareAmounts) draft.shareAmounts(expenseId) else null
+    val context = LocalContext.current
+    // The photograph the camera is writing to, between the tap and its result.
+    var cameraTarget by remember { mutableStateOf<Uri?>(null) }
+
+    fun upload(uri: Uri) {
+        uploadingReceipt = true
+        receiptFailure = null
+        scope.launch {
+            try {
+                val photo = withContext(Dispatchers.IO) { ReceiptPhotos.read(context, uri) }
+                val document = client.uploadDocument(
+                    bytes = photo.bytes,
+                    mimeType = photo.mimeType,
+                    fileName = photo.fileName,
+                    width = photo.width,
+                    height = photo.height,
+                )
+                draft = draft.copy(documents = draft.documents + document)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                receiptFailure = error.localizedMessage ?: "Couldn’t add the receipt."
+            } finally {
+                uploadingReceipt = false
+            }
+        }
+    }
+
+    // A receipt is uploaded the moment it is picked, not when the expense is saved: the photo is
+    // somebody's evidence that the expense happened, and losing the form must not lose it.
+    //
+    // The picker is the system's own: one chooser offering the camera and the file app, so the
+    // photo comes from wherever it actually is. The camera writes into a file this app owns and
+    // hands back through the FileProvider, which is why a picture taken here reads back as
+    // reliably as one chosen from storage.
+    val receiptPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val chosen = result.data?.data ?: cameraTarget
+        if (chosen != null) upload(chosen)
+    }
+
+    fun pickReceipt() {
+        val target = runCatching {
+            val directory = File(context.cacheDir, "receipts").apply { mkdirs() }
+            val file = File.createTempFile("receipt-", ".jpg", directory)
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }.getOrNull()
+        if (target == null) {
+            // No provider to hand a camera: the file app still works, and says so if it does not.
+            receiptFailure = "This phone can’t take a photo here. Choose a file instead."
+            return
+        }
+        cameraTarget = target
+        val capture = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_OUTPUT, target)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val files = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+        }
+        receiptPicker.launch(
+            Intent.createChooser(files, "Add a receipt").apply {
+                putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(capture))
+            },
+        )
+    }
+
+    /** Whether a failure means nothing was sent, rather than the server refusing what was sent. */
+    fun offline(error: Exception): Boolean =
+        error is IOException && error !is TrpcServerException
+
+    /**
+     * Keeps a change that could not be sent, so closing the app does not lose it.
+     *
+     * The request is stored exactly as it was built, which is what lets it be sent later without
+     * the form existing any more.
+     */
+    fun queue(values: app.spliit.data.remote.ExpenseFormValues) {
+        val category = categories.firstOrNull { it.id == values.category }
+        container.outbox.put(
+            PendingExpense(
+                key = expenseId,
+                groupId = group.id,
+                kind = if (editing == null) {
+                    PendingExpense.Kind.CREATE
+                } else {
+                    PendingExpense.Kind.UPDATE
+                },
+                valuesJson = values.toJson().toString(),
+                actorId = actorId,
+                title = values.title,
+                amount = values.amount,
+                expenseDateEpochMillis = draft.expenseDate
+                    .atStartOfDay(ZoneOffset.UTC)
+                    .toInstant()
+                    .toEpochMilli(),
+                categoryId = values.category,
+                categoryName = category?.name,
+                categoryGrouping = category?.grouping,
+                paidById = values.paidBy,
+                paidFor = values.paidFor.map {
+                    PendingExpense.PaidFor(it.participant, it.shares)
+                },
+                isReimbursement = values.isReimbursement,
+                splitMode = values.splitMode,
+                queuedAtEpochMillis = System.currentTimeMillis(),
+            ),
+        )
+    }
 
     fun save() {
         hasAttemptedSave = true
@@ -141,14 +269,29 @@ fun ExpenseFormSheet(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                failure = error.localizedMessage ?: "Couldn’t save the expense."
+                if (offline(error)) {
+                    // Saved, from the person's side: it is on the list, marked as waiting, and it
+                    // survives closing the app.
+                    queue(values)
+                    onSaved()
+                } else {
+                    failure = error.localizedMessage ?: "Couldn’t save the expense."
+                }
             } finally {
                 isSaving = false
             }
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // A form is not a peek: dragging it is how a long one gets closed by accident while the
+    // thumb is scrolling its fields. The gestures are off and the handle is gone, so the only
+    // ways out are the Cancel button, the scrim and back - all of them deliberate.
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        dragHandle = null,
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -262,43 +405,11 @@ fun ExpenseFormSheet(
                 }
                 problemText(draft, hasAttemptedSave, ExpenseFormDraft.Problem.PayerMissing)
 
-                if (categories.isNotEmpty()) {
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { categoryMenuOpen = true }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("Category", style = MaterialTheme.typography.bodyLarge)
-                            Spacer(Modifier.weight(1f))
-                            Text(
-                                text = categories.firstOrNull { it.id == draft.categoryId }?.name
-                                    ?: "General",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            ExpandChevron(
-                                    expanded = categoryMenuOpen,
-                                )
-                        }
-                        ExpressiveMenu(
-                            expanded = categoryMenuOpen,
-                            onDismissRequest = { categoryMenuOpen = false },
-                        ) {
-                            categories.forEach { category ->
-                                ExpressiveMenuItem(
-                                    text = "${category.grouping} · ${category.name}",
-                                    selected = category.id == draft.categoryId,
-                                    onClick = {
-                                        categoryMenuOpen = false
-                                        draft = draft.copy(categoryId = category.id)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+                CategoryPicker(
+                    categories = categories,
+                    selectedId = draft.categoryId,
+                    onSelect = { draft = draft.copy(categoryId = it) },
+                )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("This is a reimbursement", modifier = Modifier.weight(1f))
@@ -408,6 +519,20 @@ fun ExpenseFormSheet(
                     minLines = 2,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+
+                ReceiptAttachments(
+                    documents = draft.documents,
+                    uploading = uploadingReceipt,
+                    failure = receiptFailure,
+                    onAdd = { if (!uploadingReceipt) pickReceipt() },
+                    onRemove = { document ->
+                        draft = draft.copy(
+                            documents = draft.documents.filterNot { it.id == document.id },
+                        )
+                    },
                 )
 
                 if (editing != null) {

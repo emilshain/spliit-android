@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -21,7 +20,10 @@ import androidx.compose.ui.unit.sp
  *
  * Spliit has no accounts and no avatars, so a participant has only ever been a name in a row.
  * A monogram gives the eye something to find: the same person is the same colour in the
- * balances, in the expense list and in a suggested payment, on every device.
+ * balances, in the expense list and in a suggested payment, on every device. The colours come
+ * from [LocalSpliitColors], so a template re-colours people along with everything else while
+ * keeping each person's index — and their initials always sit on an `on-` colour measured
+ * against their fill.
  *
  * Growing with the text keeps the chip in proportion with the name beside it. The cap is what
  * stops it becoming the row: at the largest accessibility size an uncapped circle is wider than
@@ -40,12 +42,12 @@ fun Monogram(
         modifier = Modifier
             .size(side)
             .clip(CircleShape)
-            .background(SpliitPalette.monogram(colorIndex)),
+            .background(LocalSpliitColors.current.monogramFill(colorIndex)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = MonogramPalette.initials(name),
-            color = Color.White,
+            color = LocalSpliitColors.current.monogramOn(colorIndex),
             fontSize = (side.value * 0.42f).sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -65,6 +67,6 @@ fun ParticipantDot(position: Int, size: Dp = 8.dp) {
         modifier = Modifier
             .size(size * fontScale.coerceAtMost(1.6f))
             .clip(CircleShape)
-            .background(SpliitPalette.monogram(MonogramPalette.indexAtPosition(position))),
+            .background(LocalSpliitColors.current.monogramFill(MonogramPalette.indexAtPosition(position))),
     )
 }

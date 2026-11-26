@@ -1,8 +1,12 @@
 package app.spliit
 
 import android.content.Context
+import app.spliit.data.local.AppearanceSettings
+import app.spliit.data.local.ExpenseOutbox
+import app.spliit.data.local.GroupCache
 import app.spliit.data.local.RecentGroupsRepository
 import app.spliit.data.local.ServerSettings
+import app.spliit.data.model.GroupSummary
 import app.spliit.data.remote.TrpcClient
 import app.spliit.domain.ServerInstance
 import kotlinx.coroutines.flow.Flow
@@ -23,14 +27,28 @@ class AppContainer(
     /** The on-disk stores, overridable so a test can give a screen an in-memory one. */
     recentGroupStore: RecentGroupsRepository = RecentGroupsRepository(context.applicationContext),
     serverSettingsStore: ServerSettings = ServerSettings(context.applicationContext),
+    /** How the app should look: following the phone, or light/dark as chosen on the home screen. */
+    appearanceSettingsStore: AppearanceSettings = AppearanceSettings(context.applicationContext),
     /** Where HTTP goes: the default client in the app, a canned instance in a test. */
     private val callFactory: Call.Factory = TrpcClient.defaultCallFactory,
+    /** The last good read of each group, so its page opens with no network. */
+    val groupCache: GroupCache = GroupCache(context.applicationContext),
+    /** Expense changes that could not be sent yet, kept until an instance answers. */
+    val outbox: ExpenseOutbox = ExpenseOutbox(context.applicationContext),
 ) {
 
     val serverSettings = serverSettingsStore
+    val appearance = appearanceSettingsStore
     val recentGroups = recentGroupStore
 
     private val clients = ConcurrentHashMap<String, TrpcClient>()
+
+    /**
+     * The group details the home list last got back, so returning to it shows the counts and
+     * dates it showed before while the instances are asked again. A cache of a read, not a
+     * store: nothing is written to disk and losing it costs one round trip.
+     */
+    var lastGroupSummaries: Map<String, GroupSummary> = emptyMap()
 
     /** Where a group with no address of its own is taken to be, and where new ones start. */
     val defaultInstanceUrl: Flow<String> = serverSettings.baseUrl

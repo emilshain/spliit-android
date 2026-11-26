@@ -1,6 +1,8 @@
 package app.spliit.ui.activity
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,8 +14,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Add
@@ -30,7 +33,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -53,6 +60,8 @@ import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SkeletonSection
+import app.spliit.ui.theme.SpliitDimens
+import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -128,6 +137,7 @@ private fun ActivityList(
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
+    val refreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
@@ -140,23 +150,38 @@ private fun ActivityList(
                 }
             }
         },
+        state = refreshState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = refreshState,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            // Clear of the floating tab bar, which the list scrolls behind.
-            contentPadding = PaddingValues(top = 60.dp),
         ) {
             sections.forEach { section ->
                 item(key = "header-${section.date}") {
                     DateBucketHeader(section.title)
                 }
-                items(section.activities, key = { it.id }) { activity ->
+                // A day's entries are one stack: shared sides take the small corner, so the
+                // log reads as cards under a date rather than a wall of text.
+                itemsIndexed(
+                    items = section.activities,
+                    key = { _, activity -> activity.id },
+                ) { index, activity ->
                     ActivityRow(
                         activity = activity,
                         participantName = activity.participantId?.let { model.participant(it)?.name },
                         showsDate = false,
                         opensExpense = activity.expenseStillExists,
+                        shape = activityShape(
+                            first = index == 0,
+                            last = index == section.activities.lastIndex,
+                        ),
                         onOpen = { activity.expenseId?.let(onEdit) },
                     )
                 }
@@ -188,41 +213,70 @@ private fun ActivityRow(
     participantName: String?,
     showsDate: Boolean,
     opensExpense: Boolean,
+    shape: Shape,
     onOpen: () -> Unit,
 ) {
-    Row(
+    val interaction = remember { MutableInteractionSource() }
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (opensExpense) Modifier.clickable(onClick = onOpen) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top,
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .then(
+                if (opensExpense) {
+                    Modifier
+                        // The row dips under the finger; no ripple over a card.
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = LocalIndication.current,
+                            onClick = onOpen,
+                        )
+                        .pressScale(interaction, pressedScale = 0.98f)
+                } else {
+                    Modifier
+                },
+            ),
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        // A fixed column, so the sentences line up down the list rather than shifting with the
-        // width of each glyph.
-        Icon(
-            imageVector = symbol(activity.activityType),
-            contentDescription = null,
-            modifier = Modifier.width(16.dp).padding(top = 2.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = summary(activity, participantName),
-                style = SpliitType.RowTitle,
+            // A fixed column, so the sentences line up down the list rather than shifting with
+            // the width of each glyph.
+            Icon(
+                imageVector = symbol(activity.activityType),
+                contentDescription = null,
+                modifier = Modifier.width(16.dp).padding(top = 2.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = timestamp(activity.time, showsDate),
-                style = SpliitType.Secondary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = summary(activity, participantName),
+                    style = SpliitType.RowTitle,
+                )
+                Text(
+                    text = timestamp(activity.time, showsDate),
+                    style = SpliitType.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
+
+/** A row's own corners, and the smaller ones it shares with the row above or below it. */
+private fun activityShape(first: Boolean, last: Boolean): RoundedCornerShape = RoundedCornerShape(
+    topStart = if (first) 16.dp else 6.dp,
+    topEnd = if (first) 16.dp else 6.dp,
+    bottomStart = if (last) 16.dp else 6.dp,
+    bottomEnd = if (last) 16.dp else 6.dp,
+)
 
 /** The same glyphs the app uses for these actions elsewhere. */
 private fun symbol(type: ActivityType): ImageVector = when (type) {
@@ -273,7 +327,7 @@ private fun ActivitySkeleton() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = 16.dp, end = 16.dp, top = 68.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SkeletonSection()

@@ -111,7 +111,7 @@ private fun Artwork(art: EmptyStateArt) {
             Icon(
                 imageVector = art.vector,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = LocalSpliitColors.current.brandOnAccentSoft,
                 modifier = Modifier.size(30.dp),
             )
         }

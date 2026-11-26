@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.spliit.AppContainer
+import app.spliit.data.local.CachedGroup
+import app.spliit.data.local.PendingExpense
 import app.spliit.data.local.RecentGroup
 import app.spliit.data.model.Activity
 import app.spliit.data.model.Balance
@@ -15,6 +17,8 @@ import app.spliit.data.model.Group
 import app.spliit.data.model.GroupStatsResponse
 import app.spliit.data.model.Participant
 import app.spliit.data.model.Reimbursement
+import app.spliit.data.model.SplitMode
+import app.spliit.data.remote.ExpenseFormValues
 import app.spliit.data.remote.GroupFormValues
 import app.spliit.data.remote.SpliitApi
 import app.spliit.data.remote.TrpcClient
@@ -23,8 +27,10 @@ import app.spliit.data.remote.groupStats
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.DateHeading
 import app.spliit.domain.CategorySpending
+import app.spliit.domain.ExpenseShares
 import app.spliit.domain.GroupExport
 import app.spliit.domain.MoneyFormatter
+import app.spliit.domain.SplitwiseCsv
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,6 +39,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -56,6 +65,15 @@ class GroupScreenModel(
         private set
     var expenses by mutableStateOf<List<ExpenseListItem>>(emptyList())
         private set
+
+    /**
+     * Changes still waiting to reach the server, read back from the outbox on disk.
+     *
+     * They are part of the list, not a separate section: a person who saved an expense expects
+     * to see it where every other expense is, with a mark saying it has not been sent yet.
+     */
+    var pendingExpenses by mutableStateOf<List<PendingExpense>>(emptyList())
+        private set
     var balances by mutableStateOf<Map<String, Balance>>(emptyMap())
         private set
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
@@ -78,6 +96,20 @@ class GroupScreenModel(
     var expensesFailure by mutableStateOf<String?>(null)
         private set
     var balancesFailure by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Showing a snapshot rather than the server's answer.
+     *
+     * Set when a load failed and the cache had the group, cleared by the next load that reaches
+     * the server. The screen says so beside the group's status: what is on it is true as of
+     * [cachedAt], and nothing new has been read.
+     */
+    var isOffline by mutableStateOf(false)
+        private set
+
+    /** When the snapshot on screen was taken, when [isOffline]. */
+    var cachedAt by mutableStateOf<java.time.Instant?>(null)
         private set
 
     private var didLoadExpenses = false
@@ -115,7 +147,29 @@ class GroupScreenModel(
 
     /** Expenses grouped into the sections the list shows, newest bucket first. */
     val sections: List<ExpenseSection>
-        get() = sectionsOf(expenses)
+        get() = sectionsOf(displayExpenses)
+
+    /** Whether a row is a change that has not reached the server yet. */
+    fun isPending(expenseId: String): Boolean = pendingExpenses.any { it.key == expenseId }
+
+    /**
+     * The server's rows with the waiting changes folded in: a queued create is drawn as itself,
+     * and an expense with a queued edit or delete keeps the server's row (the newest version is
+     * what will be sent).
+     */
+    private val displayExpenses: List<ExpenseListItem>
+        get() {
+            val queued = pendingExpenses
+            if (queued.isEmpty()) return expenses
+            // A queued delete hides the row; a queued edit keeps it, because the server's
+            // version is still the one on screen and the newest version is what will be sent.
+            val replaced = queued.filter { it.kind == PendingExpense.Kind.DELETE }
+                .map { it.key }
+                .toSet()
+            val local = queued.filter { it.kind == PendingExpense.Kind.CREATE }
+                .mapNotNull { it.toListItem(group) }
+            return local + expenses.filterNot { it.id in replaced }
+        }
 
     val moneyFormatter: MoneyFormatter
         get() = MoneyFormatter(group?.currency.orEmpty(), group?.currencyCode)
@@ -155,8 +209,75 @@ class GroupScreenModel(
         scope.launch { reload() }
     }
 
+    /** The outbox as it is on disk: another screen or an earlier launch may have changed it. */
+    private fun refreshPending() {
+        pendingExpenses = container.outbox.forGroup(groupId)
+    }
+
+    /**
+     * Sends whatever was waiting, oldest first.
+     *
+     * A change the server accepts leaves the outbox; a change the server refuses is dropped
+     * rather than retried forever, because the answer will not change; a change that still cannot
+     * be sent stops the run, so the next one is not sent out of order.
+     */
+    private suspend fun flushPendingExpenses(): Boolean {
+        val current = client ?: return false
+        var sent = false
+        for (pending in container.outbox.forGroup(groupId)) {
+            val values: JsonElement? = pending.valuesJson?.let {
+                runCatching { Json.parseToJsonElement(it) }.getOrNull()
+            }
+            if (pending.kind != PendingExpense.Kind.DELETE && values == null) {
+                container.outbox.remove(pending)
+                continue
+            }
+            try {
+                when (pending.kind) {
+                    PendingExpense.Kind.CREATE -> current.call(
+                        SpliitApi.createExpenseRaw(
+                            groupId = groupId,
+                            values = values!!,
+                            byParticipantId = pending.actorId,
+                            expenseId = pending.key,
+                        ),
+                    )
+
+                    PendingExpense.Kind.UPDATE -> current.call(
+                        SpliitApi.updateExpenseRaw(
+                            groupId = groupId,
+                            expenseId = pending.key,
+                            values = values!!,
+                            byParticipantId = pending.actorId,
+                        ),
+                    )
+
+                    PendingExpense.Kind.DELETE -> current.call(
+                        SpliitApi.deleteExpenseRaw(groupId, pending.key, pending.actorId),
+                    )
+                }
+                container.outbox.remove(pending)
+                sent = true
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: TrpcServerException) {
+                container.outbox.remove(pending)
+                expensesFailure = error.localizedMessage
+            } catch (error: Exception) {
+                break
+            }
+        }
+        if (sent) refreshPending()
+        return sent
+    }
+
     private suspend fun reload() {
         val current = client ?: return
+        refreshPending()
+        // The last good read goes up before the network is asked, so returning to a group shows
+        // what it showed last time instead of a skeleton. A successful read replaces it below;
+        // a failed one leaves it there, marked offline.
+        if (group == null) container.groupCache.load(groupId)?.let { restoreSnapshot(it) }
         coroutineScope {
             listOf(
                 async { loadGroup(current) },
@@ -165,6 +286,55 @@ class GroupScreenModel(
                 async { loadCategories(current) },
             ).awaitAll()
         }
+        // Reached the server: the snapshot on disk becomes this read, and whatever was waiting
+        // to be sent is sent now that there is somewhere to send it.
+        if (group != null && !isOffline) {
+            persistSnapshot()
+            if (flushPendingExpenses()) loadFirstPage(current)
+            persistSnapshot()
+        }
+    }
+
+    /** Writes the group as it stands, so the next launch has something to open. */
+    private fun persistSnapshot() {
+        val currentGroup = group ?: return
+        container.groupCache.save(
+            CachedGroup(
+                group = currentGroup,
+                expenses = expenses,
+                balances = balances,
+                reimbursements = reimbursements,
+                categories = categories,
+                activities = activities,
+                savedAtEpochMillis = System.currentTimeMillis(),
+                hasMoreExpenses = hasMoreExpenses,
+                nextCursor = nextCursor,
+            ),
+        )
+    }
+
+    /**
+     * Puts a snapshot on screen and says it is one. Everything the screen asks ("have the
+     * expenses loaded?") answers yes, because they have - just not now, and not from here.
+     */
+    private suspend fun restoreSnapshot(snapshot: CachedGroup) {
+        group = snapshot.group
+        expenses = snapshot.expenses
+        balances = snapshot.balances
+        reimbursements = snapshot.reimbursements
+        categories = snapshot.categories
+        activities = snapshot.activities
+        if (snapshot.activities.isNotEmpty()) didLoadActivities = true
+        nextCursor = snapshot.nextCursor
+        hasMoreExpenses = false
+        didLoadExpenses = true
+        didLoadBalances = true
+        groupFailure = null
+        expensesFailure = null
+        balancesFailure = null
+        isOffline = true
+        cachedAt = java.time.Instant.ofEpochMilli(snapshot.savedAtEpochMillis)
+        refreshActor()
     }
 
     /**
@@ -195,6 +365,121 @@ class GroupScreenModel(
     /** The group's expenses as the instance exports them: the web app's export button, in code. */
     suspend fun exportCsv(): String =
         container.clientForGroup(groupId).text(GroupExport.csvPath(groupId))
+
+    /**
+     * The same expenses as a Splitwise file.
+     *
+     * Built here rather than downloaded: the instance's own export is Spliit's shape, and a file
+     * another app can open has to be this one. It walks every page, which is the same sweep the
+     * category breakdown does, and folds each one into a line.
+     */
+    suspend fun exportSplitwiseCsv(): String {
+        val current = client ?: error("This group is not ready yet.")
+        val currentGroup = group ?: error("This group is not ready yet.")
+        val all = mutableListOf<ExpenseListItem>()
+        var cursor = 0
+        while (true) {
+            val page = current.call(
+                SpliitApi.expenses(groupId, cursor = cursor, limit = SNAPSHOT_PAGE_SIZE),
+            )
+            all += page.expenses
+            if (!page.hasMore) break
+            cursor = page.nextCursor
+        }
+        return SplitwiseCsv.write(currentGroup, all)
+    }
+
+    /** What happened to a file full of expenses. */
+    data class ImportOutcome(val created: Int, val failed: Int, val firstFailure: String?)
+
+    /**
+     * Creates one expense per row, in file order.
+     *
+     * Sequential on purpose: an import is a handful of writes to somebody's shared ledger, and
+     * firing them all at once makes a partial failure impossible to explain. Each row is resolved
+     * against this group - the columns name people, and a name the group has is the participant
+     * it means.
+     */
+    suspend fun importExpenses(
+        rows: List<SplitwiseCsv.Row>,
+        onProgress: (Int) -> Unit = {},
+    ): ImportOutcome {
+        val current = client ?: return ImportOutcome(0, rows.size, "This group is not ready yet.")
+        val currentGroup = group ?: return ImportOutcome(0, rows.size, "This group is not ready yet.")
+        var created = 0
+        var failed = 0
+        var firstFailure: String? = null
+
+        rows.forEachIndexed { index, row ->
+            try {
+                val matched = row.participants.mapNotNull { name ->
+                    SplitwiseCsv.match(name, currentGroup.participants)
+                }
+                val involved = matched.ifEmpty { currentGroup.participants }
+
+                val paidFor: List<ExpenseFormValues.PaidFor>
+                val splitMode: SplitMode
+                val payer: String?
+                if (row.owed.isNotEmpty()) {
+                    // Shares: each column is what that person owes, in money.
+                    paidFor = involved.mapNotNull { participant ->
+                        val owed = row.owed.entries.firstOrNull {
+                            SplitwiseCsv.participantKey(it.key) ==
+                                SplitwiseCsv.participantKey(participant.name)
+                        }?.value ?: return@mapNotNull null
+                        ExpenseFormValues.PaidFor(participant = participant.id, shares = owed)
+                    }
+                    splitMode = SplitMode.BY_AMOUNT
+                    payer = actorId ?: involved.first().id
+                } else {
+                    // Payments: the biggest payer paid, everyone named was in on it.
+                    val byName = row.payer?.let { name ->
+                        involved.firstOrNull {
+                            SplitwiseCsv.participantKey(it.name) == SplitwiseCsv.participantKey(name)
+                        }
+                    }
+                    paidFor = involved.map {
+                        ExpenseFormValues.PaidFor(participant = it.id, shares = 100)
+                    }
+                    splitMode = SplitMode.EVENLY
+                    payer = byName?.id ?: actorId ?: involved.first().id
+                }
+                if (paidFor.isEmpty()) error("No participant on this row is in the group.")
+
+                val categoryId = categories.firstOrNull {
+                    row.category.isNotBlank() &&
+                        (it.name.equals(row.category, ignoreCase = true) ||
+                            it.grouping.equals(row.category, ignoreCase = true))
+                }?.id ?: 0
+
+                current.call(
+                    SpliitApi.createExpense(
+                        groupId = groupId,
+                        values = ExpenseFormValues(
+                            title = row.description,
+                            expenseDate = CalendarDay.wire(row.date),
+                            amount = row.amount,
+                            category = categoryId,
+                            paidBy = payer,
+                            paidFor = paidFor,
+                            splitMode = splitMode,
+                        ),
+                        byParticipantId = actorId,
+                    ),
+                )
+                created++
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                failed++
+                if (firstFailure == null) firstFailure = error.localizedMessage
+            }
+            onProgress(index + 1)
+        }
+
+        if (created > 0) reloadAfterExpenseChangeNow()
+        return ImportOutcome(created, failed, firstFailure)
+    }
 
     fun reloadAfterExpenseChange() {
         scope.launch { reloadAfterExpenseChangeNow() }
@@ -228,11 +513,16 @@ class GroupScreenModel(
                 async { reloadActivitiesIfLoaded(current) },
             ).awaitAll()
         }
+        // The snapshot is what the page shows next time it opens with no network, so a change
+        // written here has to reach it too - otherwise going offline would undo the edit.
+        if (!isOffline) persistSnapshot()
     }
 
     private suspend fun loadGroup(client: TrpcClient) {
         try {
             val loaded = client.call(SpliitApi.group(groupId)).group
+            isOffline = false
+            cachedAt = null
             if (loaded == null) {
                 groupFailure = "This group no longer exists on this server."
             } else {
@@ -252,6 +542,7 @@ class GroupScreenModel(
             throw error
         } catch (error: Exception) {
             groupFailure = error.localizedMessage
+            if (group != null && isOfflineNetworkFailure(error)) isOffline = true
         }
     }
 
@@ -268,6 +559,7 @@ class GroupScreenModel(
         } catch (error: Exception) {
             expensesFailure = error.localizedMessage
             didLoadExpenses = true
+            if (expenses.isNotEmpty() && isOfflineNetworkFailure(error)) isOffline = true
         }
     }
 
@@ -365,6 +657,15 @@ class GroupScreenModel(
         isLoadingStats = true
         statsFailure = null
 
+        // With no network there is still an answer: the cached expenses are enough to total, and
+        // a stale total that adds up beats a page saying it could not be read.
+        if (isOffline) {
+            stats = localStats(participantId)
+            statsUnavailable = false
+            isLoadingStats = false
+            return
+        }
+
         try {
             val response = current.groupStats(groupId, participantId)
             // The picker may have moved on while this was in flight; somebody else's share must
@@ -383,10 +684,48 @@ class GroupScreenModel(
             statsUnavailable = true
             statsFailure = null
         } catch (error: Exception) {
-            if (statsParticipantId == participantId) statsFailure = error.localizedMessage
+            if (statsParticipantId == participantId) {
+                if (group != null && isOfflineNetworkFailure(error)) {
+                    isOffline = true
+                    stats = localStats(participantId)
+                    statsFailure = null
+                } else {
+                    statsFailure = error.localizedMessage
+                }
+            }
         } finally {
             if (statsParticipantId == participantId) isLoadingStats = false
         }
+    }
+
+    /**
+     * The totals over the cached expenses.
+     *
+     * Same rules as the server's: reimbursements are not spending, and a participant's share is
+     * the same apportionment the balances tab charges. It covers the cached pages only, which is
+     * exactly the data the rest of the screen is showing.
+     */
+    private fun localStats(participantId: String?): GroupStatsResponse {
+        val counted = expenses.filterNot { it.isReimbursement }
+        val groupSpendings = counted.sumOf { it.amount }
+        val spendings = participantId?.let { id ->
+            counted.filter { it.paidBy.id == id }.sumOf { it.amount }
+        }
+        val share = participantId?.let { id ->
+            counted.sumOf { expense ->
+                ExpenseShares.shares(
+                    expense.id,
+                    expense.amount,
+                    expense.splitMode,
+                    expense.paidFor,
+                )[id] ?: 0
+            }
+        }?.toDouble()
+        return GroupStatsResponse(
+            totalGroupSpendings = groupSpendings,
+            totalParticipantSpendings = spendings,
+            totalParticipantShare = share,
+        )
     }
 
     /** The same, fired from a button rather than from a suspending effect. */
@@ -451,6 +790,14 @@ class GroupScreenModel(
         isLoadingCategorySpending = true
         categorySpendingFailure = null
 
+        // Offline the sweep is the same fold over what is already on hand.
+        if (isOffline) {
+            categorySpending = CategorySpending.Fold().apply { add(expenses) }.breakdown
+            didLoadCategorySpending = true
+            isLoadingCategorySpending = false
+            return
+        }
+
         val fold = CategorySpending.Fold()
         var cursor = 0
         try {
@@ -474,7 +821,14 @@ class GroupScreenModel(
             // What was already folded stays on screen; it is only drawn while it reconciles, so a
             // stale breakdown either still adds up — in which case it is still true — or stops
             // being shown on its own.
-            categorySpendingFailure = error.localizedMessage
+            if (group != null && isOfflineNetworkFailure(error)) {
+                isOffline = true
+                categorySpending = CategorySpending.Fold().apply { add(expenses) }.breakdown
+                didLoadCategorySpending = true
+                categorySpendingFailure = null
+            } else {
+                categorySpendingFailure = error.localizedMessage
+            }
         } finally {
             isLoadingCategorySpending = false
         }
@@ -556,6 +910,16 @@ class GroupScreenModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            // The log was in the snapshot; without a network it is still the log.
+            val cached = container.groupCache.load(groupId)?.activities.orEmpty()
+            if (cached.isNotEmpty() && isOfflineNetworkFailure(error)) {
+                activities = cached
+                hasMoreActivities = false
+                activitiesFailure = null
+                didLoadActivities = true
+                isOffline = true
+                return
+            }
             activitiesFailure = error.localizedMessage
             didLoadActivities = true
         }
@@ -660,6 +1024,10 @@ class GroupScreenModel(
             didLoadSearch = false
             return
         }
+        if (isOffline) {
+            loadLocalSearch(requested)
+            return
+        }
         loadFirstSearchPage(requested)
     }
 
@@ -681,10 +1049,33 @@ class GroupScreenModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            if (filter == query) searchFailure = error.localizedMessage
+            if (filter == query) {
+                if (group != null && isOfflineNetworkFailure(error)) {
+                    isOffline = true
+                    loadLocalSearch(query)
+                } else {
+                    searchFailure = error.localizedMessage
+                }
+            }
         } finally {
             if (filter == query) isSearching = false
         }
+    }
+
+    /**
+     * The same search, answered from the cached expenses.
+     *
+     * The server matches titles and notes; the list rows carry the title only, so that is what
+     * this matches. It is the honest offline answer, not a claim of a full-text search.
+     */
+    private fun loadLocalSearch(query: String) {
+        val needle = query.trim()
+        searchResults = displayExpenses.filter { it.title.contains(needle, ignoreCase = true) }
+        hasMoreSearchResults = false
+        nextSearchCursor = 0
+        searchFailure = null
+        didLoadSearch = true
+        isSearching = false
     }
 
     fun loadNextSearchPage() {
@@ -816,6 +1207,25 @@ class GroupScreenModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (isOfflineNetworkFailure(error)) {
+                    // The delete is kept, and the row stays gone: the intention is the data, not
+                    // the row. It will be sent when the instance answers.
+                    container.outbox.put(
+                        PendingExpense(
+                            key = pending.expense.id,
+                            groupId = groupId,
+                            kind = PendingExpense.Kind.DELETE,
+                            actorId = pending.actorId,
+                            title = pending.expense.title,
+                            amount = pending.expense.amount,
+                            expenseDateEpochMillis = pending.expense.expenseDate.toEpochMilli(),
+                            queuedAtEpochMillis = System.currentTimeMillis(),
+                        ),
+                    )
+                    isOffline = true
+                    refreshPending()
+                    return@launch
+                }
                 // The server still has it, so the screen should too.
                 val index = pending.index.coerceAtMost(expenses.size)
                 expenses = expenses.toMutableList().apply { add(index, pending.expense) }
@@ -845,8 +1255,12 @@ class GroupScreenModel(
 
     /** Drops anything waiting to be deleted out of a freshly loaded page. */
     private fun withoutPendingDeletion(items: List<ExpenseListItem>): List<ExpenseListItem> {
-        val id = pendingDeletion?.expense?.id ?: return items
-        return items.filterNot { it.id == id }
+        val queued = pendingExpenses.filter { it.kind == PendingExpense.Kind.DELETE }
+            .map { it.key }
+            .toSet()
+        val id = pendingDeletion?.expense?.id
+        if (id == null && queued.isEmpty()) return items
+        return items.filterNot { it.id == id || it.id in queued }
     }
 
     private fun sectionsOf(items: List<ExpenseListItem>): List<ExpenseSection> {
@@ -866,10 +1280,15 @@ class GroupScreenModel(
         const val SEARCH_DEBOUNCE = 250L
 
         /** How many expenses one sweep page asks for, and how many pages it will walk. */
+        const val SNAPSHOT_PAGE_SIZE = 100
         const val CATEGORY_PAGE_SIZE = 100
         const val CATEGORY_PAGE_LIMIT = 20
     }
 }
+
+/** Whether a failure means the instance could not be reached, rather than answered and refused. */
+private fun isOfflineNetworkFailure(error: Exception): Boolean =
+    error is IOException && (error !is TrpcServerException || error.httpStatus >= 500)
 
 /** One day's expenses, in the order the server sent them. */
 data class ExpenseSection(

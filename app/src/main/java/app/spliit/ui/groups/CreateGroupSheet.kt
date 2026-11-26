@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
@@ -143,7 +144,17 @@ fun CreateGroupSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // A form is not a peek: dragging it is how a long one gets closed by accident while the
+    // thumb is scrolling its fields. The gestures are off and the handle is gone, so the only
+    // ways out are the Cancel button, the scrim and back - all of them deliberate.
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        dragHandle = null,
+        // A form, not a card: square to the edges of the screen it fills.
+        shape = RectangleShape,
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),

@@ -2,13 +2,16 @@ package app.spliit.ui.groups
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,19 +25,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PlaylistRemove
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.Icons
@@ -44,11 +53,14 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,16 +71,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
+import app.spliit.data.local.AppearancePalette
 import app.spliit.data.local.RecentGroup
+import app.spliit.data.local.ThemeChoice
 import app.spliit.data.model.GroupSummary
 import app.spliit.data.remote.SpliitApi
 import app.spliit.domain.ServerInstance
@@ -81,10 +97,12 @@ import app.spliit.ui.theme.SwipeAction
 import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
+import app.spliit.ui.theme.PaletteTemplates
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
 import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
+import app.spliit.ui.theme.SpliitPalette
 import app.spliit.ui.theme.SpliitType
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -118,6 +136,10 @@ fun GroupsListScreen(
     var sheet by remember { mutableStateOf<GroupsSheet>(GroupsSheet.None) }
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var appearanceOpen by remember { mutableStateOf(false) }
+    val themeChoice by container.appearance.theme.collectAsState(initial = ThemeChoice.System)
+    val dynamicColor by container.appearance.dynamicColor.collectAsState(initial = true)
+    val palette by container.appearance.palette.collectAsState(initial = AppearancePalette.Spliit)
 
     LaunchedEffect(model) { model.start() }
 
@@ -155,6 +177,15 @@ fun GroupsListScreen(
                                 Icons.Filled.Search
                             },
                             contentDescription = if (searching) "Close search" else "Search groups",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    // Appearance lives beside search, both being things about the app rather
+                    // than about a group.
+                    IconButton(onClick = { appearanceOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Appearance",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -238,6 +269,25 @@ fun GroupsListScreen(
         }
     }
 
+    if (appearanceOpen) {
+        AppearanceSheet(
+            choice = themeChoice,
+            dynamicColor = dynamicColor,
+            palette = palette,
+            onChoose = { choice ->
+                scope.launch { container.appearance.setTheme(choice) }
+                appearanceOpen = false
+            },
+            onDynamicColorChange = { enabled ->
+                scope.launch { container.appearance.setDynamicColor(enabled) }
+            },
+            onPaletteChange = { chosen ->
+                scope.launch { container.appearance.setPalette(chosen) }
+            },
+            onDismiss = { appearanceOpen = false },
+        )
+    }
+
     when (sheet) {
         GroupsSheet.None -> Unit
         GroupsSheet.Create -> {
@@ -264,6 +314,203 @@ fun GroupsListScreen(
 }
 
 private enum class GroupsSheet { None, Create, AddByLink }
+
+/**
+ * The app's appearance, as a pick rather than a switch: System follows the phone, and Light or
+ * Dark pins this install to one side whatever the phone is set to.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppearanceSheet(
+    choice: ThemeChoice,
+    dynamicColor: Boolean,
+    palette: AppearancePalette,
+    onChoose: (ThemeChoice) -> Unit,
+    onDynamicColorChange: (Boolean) -> Unit,
+    onPaletteChange: (AppearancePalette) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Adaptive colour is the platform's, so the switch only exists where the platform has it.
+    val offersDynamicColor = SpliitPalette.supportsDynamicColor
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            // Tall enough now for themes, the switch and five templates: it scrolls rather than
+            // running off the bottom of a short screen.
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 28.dp),
+        ) {
+            Text(
+                text = "Appearance",
+                style = SpliitType.Title,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+            )
+            ThemeChoice.entries.forEachIndexed { index, option ->
+                val first = index == 0
+                val last = index == ThemeChoice.entries.lastIndex && !offersDynamicColor
+                val shape = RoundedCornerShape(
+                    topStart = if (first) GroupCardCorner else AdjacentCardCorner,
+                    topEnd = if (first) GroupCardCorner else AdjacentCardCorner,
+                    bottomStart = if (last) GroupCardCorner else AdjacentCardCorner,
+                    bottomEnd = if (last) GroupCardCorner else AdjacentCardCorner,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = if (first) 0.dp else 2.dp)
+                        .clip(shape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .clickable { onChoose(option) }
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = option.label(),
+                        style = SpliitType.RowTitle,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (option == choice) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            if (offersDynamicColor) {
+                val lastShape = RoundedCornerShape(
+                    topStart = AdjacentCardCorner,
+                    topEnd = AdjacentCardCorner,
+                    bottomStart = GroupCardCorner,
+                    bottomEnd = GroupCardCorner,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 2.dp)
+                        .clip(lastShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .toggleable(
+                            value = dynamicColor,
+                            role = Role.Switch,
+                            onValueChange = onDynamicColorChange,
+                        )
+                        .padding(start = 18.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Dynamic color",
+                            style = SpliitType.RowTitle,
+                        )
+                        Text(
+                            text = "Match your wallpaper",
+                            style = SpliitType.Secondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = dynamicColor,
+                        onCheckedChange = null,
+                    )
+                }
+            }
+
+            // A wallpaper palette cannot coexist with a template, so the templates are offered
+            // exactly when the wallpaper is not in charge.
+            if (!offersDynamicColor || !dynamicColor) {
+                Text(
+                    text = "Color",
+                    style = SpliitType.SectionHeader,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 8.dp),
+                )
+                AppearancePalette.entries.forEachIndexed { index, template ->
+                    PaletteRow(
+                        palette = template,
+                        selected = template == palette,
+                        first = index == 0,
+                        last = index == AppearancePalette.entries.lastIndex,
+                        onClick = { onPaletteChange(template) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One template: its seed as a dot, its name, and a check. The dot is the colour the palette is
+ * built from, so choosing is a matter of recognising a hue rather than reading its name.
+ */
+@Composable
+private fun PaletteRow(
+    palette: AppearancePalette,
+    selected: Boolean,
+    first: Boolean,
+    last: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(
+        topStart = if (first) GroupCardCorner else AdjacentCardCorner,
+        topEnd = if (first) GroupCardCorner else AdjacentCardCorner,
+        bottomStart = if (last) GroupCardCorner else AdjacentCardCorner,
+        bottomEnd = if (last) GroupCardCorner else AdjacentCardCorner,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = if (first) 0.dp else 2.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .clickable { onClick() }
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(RoundedCornerShape(50))
+                .background(PaletteTemplates.seed(palette)),
+        )
+        Text(
+            text = palette.label(),
+            style = SpliitType.RowTitle,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+private fun AppearancePalette.label(): String = when (this) {
+    AppearancePalette.Spliit -> "Spliit"
+    AppearancePalette.Iris -> "Iris"
+    AppearancePalette.Lagoon -> "Lagoon"
+    AppearancePalette.Ember -> "Ember"
+    AppearancePalette.Meadow -> "Meadow"
+}
+
+private fun ThemeChoice.label(): String = when (this) {
+    ThemeChoice.System -> "System"
+    ThemeChoice.Light -> "Light"
+    ThemeChoice.Dark -> "Dark"
+}
 
 /** A card's own corners, and the smaller ones it shares with the card above or below it. */
 private val GroupCardCorner = 22.dp
@@ -307,6 +554,14 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
         animationSpec = SpliitMotion.snappy(),
         label = "add button rotation",
     )
+    // The plus folds into a close by turning, and the button comes with it: the squarish FAB
+    // rounds out to a circle while it is open, so the X sits in a shape that says "close" rather
+    // than a rotated plus in a square. 56dp tall, so half of it is a circle.
+    val corner by animateDpAsState(
+        targetValue = if (open) 28.dp else 18.dp,
+        animationSpec = SpliitMotion.spatialFast(),
+        label = "add button corner",
+    )
     val containerColor by animateColorAsState(
         targetValue = if (open) {
             MaterialTheme.colorScheme.secondaryContainer
@@ -333,38 +588,19 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
         actions.forEachIndexed { index, action ->
             AnimatedVisibility(
                 visible = index in revealed,
-                enter = scaleIn(
-                    animationSpec = SpliitMotion.snappy(),
-                    initialScale = 0.86f,
-                    transformOrigin = TransformOrigin(1f, 1f),
-                ) + fadeIn(SpliitMotion.smooth()),
+                // Only the fade and the appear/disappear are the transition's: the pill scales
+                // and casts its shadow on one layer of its own, see [FabActionPill].
+                enter = fadeIn(SpliitMotion.smooth()),
                 exit = fadeOut(SpliitMotion.effectsFast()),
             ) {
-                Surface(
+                FabActionPill(
+                    action = action,
                     onClick = {
                         open = false
                         action.onClick()
                     },
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .padding(bottom = 10.dp)
-                        .shadow(elevation = SpliitElevation.FloatingAction, shape = RoundedCornerShape(50)),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Icon(
-                            imageVector = action.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Text(action.label, style = SpliitType.RowTitle)
-                    }
-                }
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
             }
         }
 
@@ -374,7 +610,7 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
             // Off the Scaffold's own 16dp corner by the same 4dp/8dp the expense list's add
             // button sits in from its edges, so the two land in the same place on screen.
             modifier = Modifier.pressScale(fabInteraction),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(corner),
             containerColor = containerColor,
             contentColor = contentColor,
         ) {
@@ -383,6 +619,53 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
                 contentDescription = if (open) "Close" else "Add group",
                 modifier = Modifier.rotate(rotation),
             )
+        }
+    }
+}
+
+/**
+ * One of the action pills that unfolds from the add button.
+ *
+ * The arrival is a single `graphicsLayer`: the scale that grows the pill out of the button's
+ * corner and the elevation that draws its shadow are on the same render node, so the shadow is
+ * drawn in the same pass as the shape it belongs to. With `scaleIn` and `Modifier.shadow` those
+ * sat on two layers and the render thread recomputed the shadow a frame behind the pill.
+ */
+@Composable
+private fun FabActionPill(
+    action: FabAction,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(50)
+    val scale = remember { Animatable(0.86f) }
+    LaunchedEffect(Unit) { scale.animateTo(1f, SpliitMotion.snappy()) }
+
+    Surface(
+        onClick = onClick,
+        shape = shape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = modifier.graphicsLayer {
+            scaleX = scale.value
+            scaleY = scale.value
+            transformOrigin = TransformOrigin(1f, 1f)
+            shadowElevation = SpliitElevation.FloatingAction.toPx()
+            this.shape = shape
+            clip = false
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = action.icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(action.label, style = SpliitType.RowTitle)
         }
     }
 }
@@ -534,7 +817,6 @@ private fun GroupRow(
     ) {
         ExpressiveSwipe(
             modifier = Modifier.fillMaxWidth(),
-            shape = shape,
             startToEnd = SwipeAction(
                 icon = Icons.Filled.Star,
                 label = if (group.isStarred) "Unstar" else "Star",
@@ -562,7 +844,7 @@ private fun GroupRow(
                         .fillMaxWidth()
                         .combinedClickable(
                             interactionSource = interaction,
-                            indication = null,
+                            indication = LocalIndication.current,
                             onClick = onClick,
                             onLongClick = { menuOpen = true },
                         )
@@ -590,13 +872,7 @@ private fun GroupRow(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            text = metaLine(summary),
-                            style = SpliitType.Secondary,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        GroupMeta(summary)
                     }
 
                     Icon(
@@ -629,10 +905,11 @@ private fun GroupRow(
                     onArchive()
                 },
             )
+            // Removing only forgets this copy: the group and its link stay on the server, which
+            // is why this is a playlist minus rather than a bin, and not in the error colour.
             ExpressiveMenuItem(
                 text = "Remove",
-                leadingIcon = Icons.Filled.Delete,
-                destructive = true,
+                leadingIcon = Icons.Filled.PlaylistRemove,
                 onClick = {
                     menuOpen = false
                     onRemove()
@@ -642,19 +919,42 @@ private fun GroupRow(
     }
 }
 
-/** "Nov 6, 2026 · 4 participants" — what the card can say that its title can't. */
-private fun metaLine(summary: GroupSummary?): String {
-    if (summary == null) return "…"
-    return listOf(dateLabel(summary.createdAt), participantText(summary)).joinToString(" · ")
-}
-
 /**
- * Localised, and pluralised here only because the app has no translation yet: the count of a
- * group's members is the one string in this list that changes shape.
+ * The date and the number of people, with the people drawn as the glyph the web app uses.
+ *
+ * The count comes from the snapshot when an instance cannot be reached, so a group that was read
+ * once keeps saying how many people are in it instead of losing the line to an apology.
  */
-private fun participantText(summary: GroupSummary?): String {
-    val count = summary?.participantCount ?: return "…"
-    return if (count == 1) "1 participant" else "$count participants"
+@Composable
+private fun GroupMeta(summary: GroupSummary?) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = summary?.let { dateLabel(it.createdAt) } ?: "…",
+            style = SpliitType.Secondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Text(
+            text = "·",
+            style = SpliitType.Secondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Icon(
+            Icons.Filled.People,
+            contentDescription = "Participants",
+            modifier = Modifier.size(12.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = summary?.participantCount?.toString() ?: "…",
+            style = SpliitType.Secondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
 }
 
 /** "Nov 24, 2026", in the user's own date format. */
@@ -676,7 +976,11 @@ class GroupsListModel(
 ) {
     var groups by mutableStateOf<List<RecentGroup>>(emptyList())
         private set
-    var summaries by mutableStateOf<Map<String, GroupSummary>>(emptyMap())
+    // A visit's own counts, so coming back to the list shows them while the servers answer
+    // again rather than a row of "…".
+    var summaries by mutableStateOf(
+        container.lastGroupSummaries.ifEmpty { container.groupCache.loadSummaries() },
+    )
         private set
     var errorMessage by mutableStateOf<String?>(null)
         private set
@@ -690,15 +994,21 @@ class GroupsListModel(
         scope.launch {
             container.recentGroups.groups.collect { remembered ->
                 groups = remembered
-                refresh()
+                // Nobody asked for this one: the list on screen is already the answer, so the
+                // details behind it are fetched without a spinner over them.
+                refresh(showIndicator = false)
             }
         }
     }
 
-    fun refresh() {
+    /**
+     * Asks every instance again. [showIndicator] is for the pull, which the person started and
+     * therefore has to see an answer to; an automatic refresh says nothing.
+     */
+    fun refresh(showIndicator: Boolean = true) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
-            isRefreshing = true
+            if (showIndicator) isRefreshing = true
             try {
                 load()
             } catch (error: CancellationException) {
@@ -748,14 +1058,17 @@ class GroupsListModel(
                 }
         }
 
-        summaries = found
-        errorMessage = if (unreachable.isEmpty()) {
-            null
-        } else {
-            // The names are stored locally, so the list is still usable — say what's missing
-            // rather than replacing everything with an error screen.
-            val names = unreachable.distinct().sorted().joinToString(" and ")
-            "Couldn’t reach $names, so group details may be out of date."
-        }
+        // What was read before, plus what was just read: an instance that could not be reached
+        // keeps its last-known counts instead of losing them to this refresh.
+        val merged = container.groupCache.loadSummaries() + found
+        summaries = merged
+        container.lastGroupSummaries = merged
+        // On disk too: dates and participant counts are the two facts the list can still give
+        // when no instance answers, and losing them would leave every row saying "…".
+        container.groupCache.saveSummaries(merged)
+        // A server that cannot be reached costs freshness, not the list: the names, dates and
+        // participant counts are all stored here, so the rows stay exactly as readable as they
+        // were. Nothing is said about it, because there is nothing the reader has to do.
+        errorMessage = null
     }
 }

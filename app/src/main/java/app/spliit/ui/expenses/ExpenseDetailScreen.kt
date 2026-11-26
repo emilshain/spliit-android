@@ -13,10 +13,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.ExpenseDetails
+import app.spliit.data.model.ExpenseDocument
 import app.spliit.data.model.Participant
 import app.spliit.data.model.SplitMode
 import app.spliit.domain.CalendarDay
@@ -173,6 +174,7 @@ private fun Receipt(
         ExpenseShares.shares(expense.id, expense.amount, expense.splitMode, expense.paidFor)
     }
     val payerPosition = participants.indexOfFirst { it.id == expense.paidBy.id }.coerceAtLeast(0)
+    var preview by remember(expense.id) { mutableStateOf<ExpenseDocument?>(null) }
 
     Column(
         modifier = Modifier
@@ -207,7 +209,7 @@ private fun Receipt(
 
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = MaterialTheme.colorScheme.outlineVariant,
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -243,7 +245,7 @@ private fun Receipt(
 
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = MaterialTheme.colorScheme.outlineVariant,
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -262,35 +264,23 @@ private fun Receipt(
                         }
                     }
 
-                    if (expense.documentCountOrZero() > 0) {
+                    if (expense.documents.isNotEmpty()) {
                         Spacer(Modifier.size(16.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Filled.AttachFile,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = attachmentsLabel(expense.documentCountOrZero()),
-                                style = SpliitType.Secondary,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        ReceiptStrip(
+                            documents = expense.documents,
+                            onOpen = { preview = it },
+                        )
                     }
 
                     expense.notes?.takeIf { it.isNotBlank() }?.let { notes ->
                         Spacer(Modifier.size(16.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(Modifier.size(12.dp))
                         Text(text = notes, style = SpliitType.Secondary)
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 // What the reader of the receipt actually owes, at the foot of it.
                 Row(
@@ -315,12 +305,23 @@ private fun Receipt(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Participants (${expense.paidFor.size})",
-                style = SpliitType.SectionHeader,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
                 modifier = Modifier.padding(start = 4.dp, top = 4.dp),
-            )
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.People,
+                    contentDescription = "Participants",
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = expense.paidFor.size.toString(),
+                    style = SpliitType.SectionHeader,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             expense.paidFor.forEach { share ->
                 val participant = participants.firstOrNull { it.id == share.participantId }
@@ -363,6 +364,10 @@ private fun Receipt(
 
         Spacer(Modifier.size(8.dp))
     }
+
+    preview?.let { document ->
+        ReceiptPreview(document = document, onDismiss = { preview = null })
+    }
 }
 
 @Composable
@@ -378,7 +383,7 @@ private fun Overline(text: String) {
 private fun Chip(text: String, icon: ImageVector? = null) {
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.outlineVariant,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -409,12 +414,6 @@ private fun splitLabel(mode: SplitMode): String = when (mode) {
     SplitMode.BY_PERCENTAGE -> "By percentage"
     SplitMode.BY_AMOUNT -> "By amount"
 }
-
-private fun attachmentsLabel(count: Int): String =
-    if (count == 1) "1 attachment" else "$count attachments"
-
-/** The documents are optional on the wire; an expense with none has none. */
-private fun ExpenseDetails.documentCountOrZero(): Int = documents.size
 
 private fun dateLabel(expense: ExpenseDetails): String =
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)

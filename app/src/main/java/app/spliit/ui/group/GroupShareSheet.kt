@@ -84,7 +84,7 @@ fun GroupShareSheet(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
             ) {
                 SelectionContainer {
                     Text(

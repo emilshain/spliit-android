@@ -1,12 +1,20 @@
 package app.spliit.data.remote
 
+import app.spliit.data.model.ExpenseDocument
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -153,11 +161,7 @@ class TrpcClient(
      * formatting the web app's export button does, without a second implementation to drift.
      */
     suspend fun text(path: String): String {
-        val builder = validatedBase.newBuilder()
-        val prefix = validatedBase.encodedPath.trimEnd('/')
-        builder.encodedPath(prefix + "/" + path.trimStart('/'))
-
-        val request = Request.Builder().url(builder.build()).get().build()
+        val request = Request.Builder().url(plainUrl(path)).get().build()
         val (status, body) = execute(request)
         if (status !in 200..299) {
             throw TrpcClientException("The export could not be fetched ($status).")
@@ -165,7 +169,98 @@ class TrpcClient(
         return body
     }
 
+    /**
+     * Uploads one receipt photograph to the instance and returns the document to attach.
+     *
+     * Spliit keeps the bytes in the instance's own object storage — S3, or anything S3-compatible
+     * — and only the resulting URL in its database, which is what every group member reads back.
+     * There is no storage of ours and no key of anyone's: the web app goes through
+     * `next-s3-upload`, which asks `/api/s3-upload` for a presigned POST policy and sends the file
+     * straight to the bucket. This is the same exchange, so a photo taken here lands exactly where
+     * one taken in the browser lands.
+     *
+     * An instance with expense documents switched off has no bucket to sign for, so the policy
+     * request is what fails; that is reported as the feature being unavailable rather than as a
+     * network error, because a person can do nothing about the latter.
+     */
+    suspend fun uploadDocument(
+        bytes: ByteArray,
+        mimeType: String,
+        fileName: String,
+        width: Int,
+        height: Int,
+    ): ExpenseDocument {
+        val policy = buildJsonObject {
+            put("filename", fileName)
+            put("contentType", mimeType)
+        }
+        val policyRequest = Request.Builder()
+            .url(plainUrl("api/s3-upload"))
+            .post(policy.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val (policyStatus, policyBody) = execute(policyRequest)
+        if (policyStatus !in 200..299) throw unavailableFor(policyStatus)
+
+        val body = runCatching { Json.parseToJsonElement(policyBody).jsonObject }
+            .getOrElse { throw TrpcClientException("The server sent no upload policy.", it) }
+
+        val postUrl = body["url"]?.jsonPrimitive?.contentOrNull
+            ?: throw TrpcClientException(UNAVAILABLE)
+        val fields = body["fields"]?.jsonObject ?: throw TrpcClientException(UNAVAILABLE)
+
+        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+        for ((name, value) in fields) {
+            form.addFormDataPart(name, value.jsonPrimitive.contentOrNull.orEmpty())
+        }
+        // The policy signs the fields above as they came: nothing may be added or reordered
+        // between them and the file, which is why the file goes on last.
+        form.addFormDataPart("file", fileName, bytes.toRequestBody(mimeType.toMediaType()))
+
+        val uploadRequest = Request.Builder().url(postUrl).post(form.build()).build()
+        val (uploadStatus, uploadBody) = execute(uploadRequest)
+        if (uploadStatus !in 200..299) {
+            throw TrpcClientException(
+                "The receipt couldn’t be stored ($uploadStatus). ${uploadBody.take(200)}".trim(),
+            )
+        }
+
+        val key = fields["key"]?.jsonPrimitive?.contentOrNull
+            ?: throw TrpcClientException("The server stored the photo without a name.")
+        return ExpenseDocument(
+            id = newDocumentId(),
+            url = postUrl.trimEnd('/') + "/" + key,
+            width = width,
+            height = height,
+        )
+    }
+
+    private fun unavailableFor(status: Int): TrpcClientException =
+        if (status == 404 || status >= 500) TrpcClientException(UNAVAILABLE)
+        else TrpcClientException("The receipt couldn’t be uploaded ($status).")
+
+    /** A plain endpoint on the instance, under whatever path it is hosted at. */
+    private fun plainUrl(path: String): HttpUrl {
+        val builder = validatedBase.newBuilder()
+        val prefix = validatedBase.encodedPath.trimEnd('/')
+        builder.encodedPath(prefix + "/" + path.trimStart('/'))
+        return builder.build()
+    }
+
+    /**
+     * Spliit's own ids are 24 lowercase characters. The server mints them for a new expense's
+     * documents, but an edit connects to a document by id, so one created here needs one too.
+     */
+    private fun newDocumentId(): String =
+        (1..24).map { DOCUMENT_ID_ALPHABET.random() }.joinToString("")
+
     companion object {
+        /** What a server says, in a person's words, when it has no storage to put photos in. */
+        const val UNAVAILABLE =
+            "This Spliit server doesn’t accept receipt photos. The feature is off on the server."
+
+        private const val DOCUMENT_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+
         /**
          * `OkHttpClient` default is 10 seconds, which a person reads as the app having hung.
          * Failing at 20 lets the screen offer a retry while the attempt is still remembered.

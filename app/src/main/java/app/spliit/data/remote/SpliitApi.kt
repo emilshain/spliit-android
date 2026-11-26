@@ -14,6 +14,8 @@ import app.spliit.data.model.GroupStatsResponse
 import app.spliit.data.model.GroupsListResponse
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationStrategy
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 
 /**
  * The Spliit router, as procedures the client can call.
@@ -111,6 +113,48 @@ object SpliitApi {
             CreateExpenseInput(groupId, values.toJson(), byParticipantId, expenseId),
             CreateExpenseInput.serializer(),
             ExpenseIdResponse.serializer(),
+        )
+
+    /**
+     * The same create, from a request an earlier session encoded and kept in the outbox: the
+     * JSON is sent as it was written, so a waiting expense is created exactly as it was typed.
+     */
+    fun createExpenseRaw(
+        groupId: String,
+        values: JsonElement,
+        byParticipantId: String? = null,
+        expenseId: String? = null,
+    ): TrpcProcedure<ExpenseIdResponse> =
+        mutation(
+            "groups.expenses.create",
+            CreateExpenseInput(groupId, values, byParticipantId, expenseId),
+            CreateExpenseInput.serializer(),
+            ExpenseIdResponse.serializer(),
+        )
+
+    fun updateExpenseRaw(
+        groupId: String,
+        expenseId: String,
+        values: JsonElement,
+        byParticipantId: String? = null,
+    ): TrpcProcedure<ExpenseIdResponse> =
+        mutation(
+            "groups.expenses.update",
+            UpdateExpenseInput(groupId, expenseId, values, byParticipantId),
+            UpdateExpenseInput.serializer(),
+            ExpenseIdResponse.serializer(),
+        )
+
+    fun deleteExpenseRaw(
+        groupId: String,
+        expenseId: String,
+        byParticipantId: String? = null,
+    ): TrpcProcedure<Unit> =
+        mutation(
+            "groups.expenses.delete",
+            DeleteExpenseInput(groupId, expenseId, byParticipantId),
+            DeleteExpenseInput.serializer(),
+            TrpcVoidSerializer,
         )
 
     fun updateExpense(

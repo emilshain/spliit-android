@@ -10,7 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -50,6 +51,8 @@ fun ExpenseRow(
     activeParticipantId: String?,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(16.dp),
+    /** A change saved here that has not reached the server yet. */
+    pending: Boolean = false,
 ) {
     val balance = activeParticipantId?.let { ExpenseBalance.of(it, expense) }
     val reading = balance?.takeIf { it != 0 }?.let { ExpenseBalance.reading(it, expense) }
@@ -97,10 +100,31 @@ fun ExpenseRow(
                     )
                     if (expense.documentCount > 0) {
                         Icon(
-                            Icons.Filled.AttachFile,
-                            contentDescription = "${expense.documentCount} documents attached",
+                            Icons.Filled.Receipt,
+                            contentDescription = "${expense.documentCount} receipts attached",
                             modifier = Modifier.size(12.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                // A waiting expense is still an expense: it sits in the list, at the amount it
+                // will be saved with, and says plainly that it has not gone yet.
+                if (pending) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.CloudUpload,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "Waiting to send",
+                            style = SpliitType.Secondary,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -133,7 +157,7 @@ private fun CategoryGlyph(expense: ExpenseListItem) {
         modifier = Modifier
             .size(42.dp)
             .background(
-                MaterialTheme.colorScheme.surfaceVariant,
+                MaterialTheme.colorScheme.surfaceContainerHighest,
                 RoundedCornerShape(13.dp),
             ),
         contentAlignment = Alignment.Center,

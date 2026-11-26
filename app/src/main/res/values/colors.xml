@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The page's own background, painted before Compose draws and between frames. -->
+    <color name="window_background">#FFF2F2F7</color>
+    <!-- The mark's own black, full bleed behind it. -->
+    <color name="ic_launcher_background">#FF0C0A09</color>
+</resources>

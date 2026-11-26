@@ -1,11 +1,7 @@
 package app.spliit.ui.theme
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,15 +21,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -102,36 +100,54 @@ fun ExpressiveMenu(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true),
     ) {
-        val visible = remember { MutableTransitionState(false) }
-        visible.targetState = true
-
-        AnimatedVisibility(
-            visibleState = visible,
-            enter = scaleIn(
-                animationSpec = SpliitMotion.snappy(),
-                initialScale = 0.9f,
-                transformOrigin = TransformOrigin(
-                    if (alignEnd) 1f else 0f,
-                    if (placement == MenuPlacement.Above) 1f else 0f,
-                ),
-            ) + fadeIn(SpliitMotion.smooth()),
-        ) {
-            // As wide as its longest row, and no wider than the screen it opens on.
-            val windowWidth = LocalConfiguration.current.screenWidthDp.dp
-            Column(
-                modifier = modifier
-                    .widthIn(
-                        min = minWidth,
-                        max = (windowWidth - 32.dp).coerceAtLeast(180.dp),
-                    )
-                    .shadow(elevation = SpliitElevation.Menu, shape = shape, clip = false)
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .padding(4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                content = content,
+        // One layer carries the whole open: the scale, the fade and the shadow. `scaleIn` inside
+        // an `AnimatedVisibility` puts the scale on one layer and `Modifier.shadow` on a child
+        // layer, and the render thread then recomputes the child's shadow a frame behind the
+        // shape it belongs to - the menu's edge moves, its shadow arrives late. Elevation on the
+        // same `graphicsLayer` as the scale is drawn in the same pass, so the two cannot separate.
+        val opened = remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { opened.value = true }
+        val scale by animateFloatAsState(
+            targetValue = if (opened.value) 1f else 0.9f,
+            animationSpec = SpliitMotion.snappy(),
+            label = "menu scale",
+        )
+        val alpha by animateFloatAsState(
+            targetValue = if (opened.value) 1f else 0f,
+            animationSpec = SpliitMotion.smooth(),
+            label = "menu fade",
+        )
+        // Grows from the corner nearest the anchor.
+        val origin = remember(alignEnd, placement) {
+            TransformOrigin(
+                if (alignEnd) 1f else 0f,
+                if (placement == MenuPlacement.Above) 1f else 0f,
             )
         }
+
+        // As wide as its longest row, and no wider than the screen it opens on.
+        val windowWidth = LocalConfiguration.current.screenWidthDp.dp
+        Column(
+            modifier = modifier
+                .widthIn(
+                    min = minWidth,
+                    max = (windowWidth - 32.dp).coerceAtLeast(180.dp),
+                )
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = origin
+                    this.alpha = alpha
+                    shadowElevation = SpliitElevation.Menu.toPx()
+                    this.shape = shape
+                    clip = false
+                }
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            content = content,
+        )
     }
 }
 

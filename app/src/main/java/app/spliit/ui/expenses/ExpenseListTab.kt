@@ -1,5 +1,6 @@
 package app.spliit.ui.expenses
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
@@ -31,9 +33,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +61,7 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonRow
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import java.util.Locale
 import kotlin.math.abs
@@ -76,6 +82,8 @@ fun ExpenseListTab(
     onEdit: (String) -> Unit,
     onSearch: () -> Unit,
     searchBarMorph: Modifier = Modifier,
+    /** True while the search bar has scrolled up under the header. */
+    onSearchCollapsed: (Boolean) -> Unit = {},
 ) {
     var payerFilter by remember { mutableStateOf<String?>(null) }
     val participants = model.group?.participants.orEmpty()
@@ -113,17 +121,36 @@ fun ExpenseListTab(
                     if (payerFilter != null && model.hasMoreExpenses) model.loadNextPage()
                 }
 
+                // The search bar is the second row; once it is gone under the header the header
+                // takes over as a small search button, so searching never scrolls out of reach.
+                val listState = rememberLazyListState()
+                val searchCollapsed by remember {
+                    derivedStateOf {
+                        val first = listState.firstVisibleItemIndex
+                        first > 1 || (first == 1 && listState.firstVisibleItemScrollOffset > 16)
+                    }
+                }
+                LaunchedEffect(searchCollapsed) { onSearchCollapsed(searchCollapsed) }
+
+                val refreshState = rememberPullToRefreshState()
                 PullToRefreshBox(
                     // A pull reloads the first page and everything that counts it; paging is the
                     // footer's job and must not be what the spinner reports.
                     isRefreshing = model.isRefreshing,
                     onRefresh = { model.refresh() },
+                    state = refreshState,
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = refreshState,
+                            isRefreshing = model.isRefreshing,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
+                    },
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
-            // Clear of the floating tab bar, which the list scrolls behind.
-            contentPadding = PaddingValues(top = 60.dp),
         ) {
                         item(key = "summary") { BalanceSummaryCard(model = model) }
 
@@ -213,7 +240,7 @@ fun ExpenseListTab(
                                         // SwiftUI button does when it is touched.
                                         .clickable(
                                             interactionSource = interaction,
-                                            indication = null,
+                                            indication = LocalIndication.current,
                                         ) { onEdit(expense.id) }
                                         .pressScale(interaction, pressedScale = 0.98f),
                                 ) {
@@ -223,6 +250,7 @@ fun ExpenseListTab(
                                         formatter = model.moneyFormatter,
                                         activeParticipantId = model.actorId,
                                         shape = shape,
+                                        pending = model.isPending(expense.id),
                                     )
                                 }
                             }
@@ -433,7 +461,7 @@ private fun BalanceSummaryCard(model: GroupScreenModel) {
 
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = MaterialTheme.colorScheme.outlineVariant,
             )
 
             if (participants.isEmpty()) {

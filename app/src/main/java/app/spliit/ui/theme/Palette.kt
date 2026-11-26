@@ -1,7 +1,11 @@
 package app.spliit.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -9,11 +13,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import com.materialkolor.hct.Hct
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.spliit.data.local.AppearancePalette
 
 /**
  * The colours the iOS app adds on top of the system palette, taken from its asset catalogue.
@@ -24,7 +33,9 @@ import androidx.compose.ui.unit.sp
  */
 object SpliitPalette {
 
-    val AccentLight = Color(0xFF059669)
+    // Tone 40: white text on it, and the accent itself as text on the page, both clear AA.
+    // It is the same emerald the iOS app uses, one step deeper than the raw brand swatch.
+    val AccentLight = Color(0xFF047A63)
     val AccentDark = Color(0xFF10B981)
 
     /** Owed to you. Emerald, darkened in light mode to clear AA against white. */
@@ -60,7 +71,6 @@ object SpliitPalette {
         Color(0xFF7C3AED), // violet
     )
 
-    fun monogram(index: Int): Color = Monograms[((index % Monograms.size) + Monograms.size) % Monograms.size]
 
     private val Light = lightColorScheme(
         primary = AccentLight,
@@ -70,7 +80,7 @@ object SpliitPalette {
         surface = CardLight,
         onSurface = Color(0xFF1C1C1E),
         surfaceVariant = Color(0xFFEFEFF4),
-        onSurfaceVariant = Color(0xFF6C6C70),
+        onSurfaceVariant = Color(0xFF636367),
         surfaceContainerLowest = Color(0xFFFFFFFF),
         surfaceContainerLow = Color(0xFFFFFFFF),
         surfaceContainer = Color(0xFFF7F7FA),
@@ -81,6 +91,9 @@ object SpliitPalette {
         outlineVariant = Color(0xFFE3E3E9),
         surfaceTint = AccentLight,
         error = MoneyNegativeLight,
+        // The undo bar's pair, in this palette's own neutrals rather than the baseline's.
+        inverseSurface = Color(0xFF1C1C1E),
+        inverseOnSurface = Color(0xFFF2F2F7),
     )
 
     private val Dark = darkColorScheme(
@@ -102,35 +115,148 @@ object SpliitPalette {
         outlineVariant = Color(0xFF3A3A3F),
         surfaceTint = AccentDark,
         error = MoneyNegativeDark,
+        inverseSurface = Color(0xFFF2F2F7),
+        inverseOnSurface = Color(0xFF1C1C1E),
     )
 
     @Composable
     fun scheme(dark: Boolean = isSystemInDarkTheme()) = if (dark) Dark else Light
+
+    /**
+     * Whether this platform can derive a palette from the wallpaper. Adaptive colour arrived
+     * with Android 12; older phones keep the app's own greens.
+     */
+    val supportsDynamicColor: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 }
 
-/** The colours that are not part of Material's scheme, read the same way from anywhere. */
+/**
+ * The colours a template adds besides its scheme, read the same way from anywhere.
+ *
+ * A template brings every role with it, so these are not new hexes: they are the scheme's own
+ * roles picked out by name — the second accent, the containers, the accents — each with the
+ * `on-` colour Material measured against it. The two money roles are the exception: they keep
+ * their green and their red, because that is the direction money went, but they take their hue
+ * and their chroma from the palette so they belong to the theme instead of sitting on it.
+ *
+ * [AppearancePalette.Spliit] is the exception the app is named for: it keeps the port's colours
+ * from the iOS asset catalogue, which is why [SpliitPalette] still exists.
+ */
 data class SpliitColors(
+    /** Owed to you. */
     val moneyPositive: Color,
+    /** You owe. */
     val moneyNegative: Color,
+    /** A template's second accent. */
     val brandSecondary: Color,
+    /** The tile an empty state's icon sits in. */
     val brandAccentSoft: Color,
-)
+    /** The icon's own colour on that tile. */
+    val brandOnAccentSoft: Color,
+    val monogramFills: List<Color>,
+    val monogramOns: List<Color>,
+) {
+    fun monogramFill(index: Int): Color = monogramFills.at(index)
 
-private val LightColors = SpliitColors(
+    fun monogramOn(index: Int): Color = monogramOns.at(index)
+
+    private fun List<Color>.at(index: Int): Color = this[((index % size) + size) % size]
+}
+
+private val SpliitMonograms = SpliitPalette.Monograms
+private val SpliitMonogramOns = List(SpliitMonograms.size) { Color.White }
+
+/** Spliit's own palette, the port of the iOS asset catalogue, in each mode. */
+private val BrandLight = SpliitColors(
     moneyPositive = SpliitPalette.MoneyPositiveLight,
     moneyNegative = SpliitPalette.MoneyNegativeLight,
     brandSecondary = SpliitPalette.BrandSecondaryLight,
     brandAccentSoft = SpliitPalette.BrandAccentSoftLight,
+    brandOnAccentSoft = SpliitPalette.AccentLight,
+    monogramFills = SpliitMonograms,
+    monogramOns = SpliitMonogramOns,
 )
 
-private val DarkColors = SpliitColors(
+private val BrandDark = SpliitColors(
     moneyPositive = SpliitPalette.MoneyPositiveDark,
     moneyNegative = SpliitPalette.MoneyNegativeDark,
     brandSecondary = SpliitPalette.BrandSecondaryDark,
     brandAccentSoft = SpliitPalette.BrandAccentSoftDark,
+    brandOnAccentSoft = SpliitPalette.AccentDark,
+    monogramFills = SpliitMonograms,
+    monogramOns = SpliitMonogramOns,
 )
 
-val LocalSpliitColors = staticCompositionLocalOf { LightColors }
+/**
+ * A template's extra roles, read back out of its scheme.
+ *
+ * Nothing here is a literal: every value is a Material role, so the template owns the whole
+ * appearance. `secondary` is the second accent, the containers and accents are what the scheme
+ * reserves for tiles and monograms, and each comes with its own `on-` colour, which keeps every
+ * set of initials legible on every template. The money roles are the one addition — a green and
+ * a red the scheme does not name, built from its accent in [semanticTint].
+ */
+private fun templateColors(scheme: ColorScheme): SpliitColors = SpliitColors(
+    moneyPositive = scheme.moneyPositiveTint(),
+    moneyNegative = scheme.moneyNegativeTint(),
+    brandSecondary = scheme.secondary,
+    brandAccentSoft = scheme.primaryContainer,
+    brandOnAccentSoft = scheme.onPrimaryContainer,
+    monogramFills = listOf(
+        scheme.primaryContainer,
+        scheme.secondaryContainer,
+        scheme.tertiaryContainer,
+        scheme.primary,
+        scheme.secondary,
+        scheme.tertiary,
+        scheme.errorContainer,
+        scheme.inverseSurface,
+    ),
+    monogramOns = listOf(
+        scheme.onPrimaryContainer,
+        scheme.onSecondaryContainer,
+        scheme.onTertiaryContainer,
+        scheme.onPrimary,
+        scheme.onSecondary,
+        scheme.onTertiary,
+        scheme.onErrorContainer,
+        scheme.inverseOnSurface,
+    ),
+)
+
+/** The green that means "owed to you" on a generated template. */
+private fun ColorScheme.moneyPositiveTint(): Color = semanticTint(anchorHue = 155.0)
+
+/** The red that means "you owe" on a generated template. */
+private fun ColorScheme.moneyNegativeTint(): Color = semanticTint(anchorHue = 8.0)
+
+/**
+ * One of the two money colours, drawn in the palette's own hand.
+ *
+ * A template brings its hues with it, so a stock emerald and a stock error red would be the only
+ * colours on the screen the palette did not choose — and on Iris or Ember, the ones that clash
+ * with it. Money cannot simply borrow `tertiary` either: on some templates the second accent is
+ * pink, and "owed to you" has to read as green.
+ *
+ * So each tint starts from the hue everyone agrees on — emerald for owed, coral red for owing —
+ * and leans that hue up to 16° towards the palette's accent, the same small rotation Material's
+ * `harmonize` uses to tint a semantic colour into a scheme. Its chroma is the accent's own, so
+ * the tint is exactly as loud as the palette around it, and its tone is set by the surface: 38
+ * on light templates, 78 on dark ones, which keeps AA against every surface an amount is drawn
+ * on. On a green template the green goes olive; on a warm one the red goes orange; on Iris the
+ * green goes teal. Neither ever stops being green or red.
+ */
+private fun ColorScheme.semanticTint(anchorHue: Double): Color {
+    val accent = Hct.fromInt(primary.toArgb())
+    // Signed shortest way round the wheel, capped so the reading survives the lean.
+    val lean = (accent.hue - anchorHue + 540.0) % 360.0 - 180.0
+    val hue = (anchorHue + lean.coerceIn(-16.0, 16.0) + 360.0) % 360.0
+    val chroma = accent.chroma.coerceIn(44.0, 72.0)
+    val tone = if (background.luminance() > 0.5f) 38.0 else 78.0
+    return Color(Hct.from(hue, chroma, tone).toInt())
+}
+
+val LocalSpliitColors = staticCompositionLocalOf { BrandLight }
 
 /**
  * Elevation, the M3 Expressive way: tone first, shadow second.
@@ -218,14 +344,31 @@ object SpliitType {
 @Composable
 fun SpliitTheme(
     dark: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    palette: AppearancePalette = AppearancePalette.Spliit,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalSpliitColors provides if (dark) DarkColors else LightColors) {
-        MaterialTheme(
-            colorScheme = SpliitPalette.scheme(dark),
-            typography = Typography(),
-            shapes = SpliitShapes.Material,
-            content = content,
-        )
+    val context = LocalContext.current
+    // The platform's own expressive palette: every role — surfaces, containers, accents — comes
+    // from the wallpaper, and the light/dark choice above still decides which half.
+    val wallpaper = dynamicColor && SpliitPalette.supportsDynamicColor
+    val scheme = when {
+        wallpaper -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        // No wallpaper palette: a template drawn by Material Color Utilities instead.
+        else -> PaletteTemplates.scheme(palette, dark)
+    }
+    // Spliit's hand-authored colours are the one case that is not its scheme's. A template or
+    // the wallpaper is; then every extra role is read back out of that scheme instead.
+    val brand = when {
+        wallpaper || palette != AppearancePalette.Spliit -> templateColors(scheme)
+        dark -> BrandDark
+        else -> BrandLight
+    }
+    MaterialTheme(
+        colorScheme = scheme,
+        typography = Typography(),
+        shapes = SpliitShapes.Material,
+    ) {
+        CompositionLocalProvider(LocalSpliitColors provides brand, content = content)
     }
 }

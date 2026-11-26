@@ -3,15 +3,19 @@ package app.spliit.ui.group
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -39,13 +43,17 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
@@ -74,15 +82,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.zIndex
 import app.spliit.AppContainer
 import app.spliit.data.local.ActiveParticipant
 import app.spliit.data.local.RecentGroup
@@ -96,6 +102,7 @@ import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.GroupExport
 import app.spliit.domain.GroupFormDraft
 import app.spliit.domain.GroupLink
+import app.spliit.domain.SplitwiseCsv
 import app.spliit.domain.ParticipantDraft
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.activity.ActivityTab
@@ -109,12 +116,15 @@ import app.spliit.ui.search.ExpenseSearchTab
 import app.spliit.ui.settlements.SettlementsScreen
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.ExpressiveMenu
+import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.ParticipantDot
 import app.spliit.ui.theme.SkeletonBox
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonLine
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SkeletonSection
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
@@ -167,6 +177,98 @@ fun GroupScreen(
     var detail by remember { mutableStateOf<ExpenseDetails?>(null) }
     var detailFailure by remember { mutableStateOf<String?>(null) }
     var isLoadingDetail by remember { mutableStateOf(false) }
+    var groupMenuOpen by remember { mutableStateOf(false) }
+    var searchCollapsed by remember { mutableStateOf(false) }
+
+    // Import and export used to live on the settings screen; they are things done to the group,
+    // so they belong in the group's own menu. The state sits here for the same reason.
+    val groupContext = LocalContext.current
+    var isExporting by remember { mutableStateOf(false) }
+    var exportFailure by remember { mutableStateOf<String?>(null) }
+    var pendingCsv by remember { mutableStateOf<String?>(null) }
+    var isImporting by remember { mutableStateOf(false) }
+    var importProgress by remember { mutableStateOf(0) }
+    var importTotal by remember { mutableStateOf(0) }
+    var pendingImport by remember { mutableStateOf<List<SplitwiseCsv.Row>?>(null) }
+    var importFailure by remember { mutableStateOf<String?>(null) }
+    var importSummary by remember { mutableStateOf<String?>(null) }
+
+    val createCsv = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv"),
+    ) { uri ->
+        val csv = pendingCsv
+        pendingCsv = null
+        if (uri == null || csv == null) return@rememberLauncherForActivityResult
+        runCatching {
+            groupContext.contentResolver.openOutputStream(uri)?.use { stream ->
+                stream.write(csv.toByteArray(Charsets.UTF_8))
+            } ?: error("The chosen file could not be opened.")
+        }.onFailure { error ->
+            exportFailure = error.localizedMessage ?: "Couldn’t write the file."
+        }
+    }
+
+    val openCsv = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            groupContext.contentResolver.openInputStream(uri)?.use { stream ->
+                SplitwiseCsv.parse(stream.readBytes().toString(Charsets.UTF_8))
+            } ?: error("The chosen file could not be opened.")
+        }.onSuccess { rows ->
+            if (rows.isEmpty()) {
+                importFailure = "No expenses were found in that file."
+            } else {
+                pendingImport = rows
+            }
+        }.onFailure { error ->
+            importFailure = error.localizedMessage ?: "That file is not an expense CSV."
+        }
+    }
+
+    fun importExpenses(rows: List<SplitwiseCsv.Row>) {
+        pendingImport = null
+        if (isImporting) return
+        isImporting = true
+        importTotal = rows.size
+        importProgress = 0
+        scope.launch {
+            try {
+                val outcome = model.importExpenses(rows) { done -> importProgress = done }
+                importSummary = when {
+                    outcome.created == 0 -> "Nothing was imported. ${outcome.firstFailure.orEmpty()}"
+                    outcome.failed == 0 -> "${outcome.created} expenses imported."
+                    else -> "${outcome.created} imported, ${outcome.failed} skipped. " +
+                        outcome.firstFailure.orEmpty()
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                importFailure = error.localizedMessage ?: "The import did not finish."
+            } finally {
+                isImporting = false
+            }
+        }
+    }
+
+    fun exportCsv() {
+        if (isExporting) return
+        isExporting = true
+        scope.launch {
+            try {
+                val csv = model.exportSplitwiseCsv()
+                pendingCsv = csv
+                createCsv.launch(GroupExport.fileName(model.group?.name.orEmpty()))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                exportFailure = error.localizedMessage ?: "Couldn’t export the expenses."
+            } finally {
+                isExporting = false
+            }
+        }
+    }
 
     LaunchedEffect(model) { model.start() }
     // A delete the user has already asked for must not be lost to leaving the screen.
@@ -174,6 +276,10 @@ fun GroupScreen(
     // Restarting on every keystroke cancels the run before it, which is what makes the wait
     // inside `search` a debounce rather than a delay.
     LaunchedEffect(query) { model.search(query) }
+    // The search icon belongs to the expenses page; any other tab takes it away.
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != 0) searchCollapsed = false
+    }
 
     val recentGroups by container.recentGroups.groups.collectAsState(initial = emptyList())
     val stored = recentGroups.firstOrNull { it.groupId == groupId }
@@ -231,24 +337,25 @@ fun GroupScreen(
         transitionSpec = {
             val spatial = SpliitMotion.spatialSlow<IntOffset>()
             val forward = targetState != GroupPage.MAIN
+            // Slides only, the way SwiftUI pushes: nothing fades, so no frame shows the page
+            // behind through a half-transparent screen.
             if (forward) {
-                (slideInHorizontally(spatial) { it } + fadeIn(SpliitMotion.effectsDefault())) togetherWith
-                    (slideOutHorizontally(spatial) { -it / 4 } + fadeOut(SpliitMotion.effectsFast()))
+                slideInHorizontally(spatial) { it } togetherWith
+                    slideOutHorizontally(spatial) { -it / 4 }
             } else {
-                (slideInHorizontally(spatial) { -it / 4 } + fadeIn(SpliitMotion.effectsDefault())) togetherWith
-                    (slideOutHorizontally(spatial) { it } + fadeOut(SpliitMotion.effectsFast()))
+                slideInHorizontally(spatial) { -it / 4 } togetherWith
+                    slideOutHorizontally(spatial) { it }
             }
         },
         label = "group page",
     ) { page ->
     if (page == GroupPage.SETTINGS) {
-        SettingsScreen(
+        EditGroupScreen(
             group = group,
             model = model,
             stored = stored,
             onBack = { destination = GroupDestination.TABS },
             onIdentify = { pickerOpen = true },
-            onDeleteGroup = { confirmDeleteGroup = true },
         )
     } else if (page == GroupPage.DETAIL) {
         ExpenseDetailScreen(
@@ -291,6 +398,9 @@ fun GroupScreen(
     } else {
         Scaffold(
             topBar = {
+                // The bar is part of the header, not a thing floating over the pages: nothing
+                // scrolls under it, so the first card can start where the header ends.
+                Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
                 CenterAlignedTopAppBar(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -307,13 +417,17 @@ fun GroupScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (destination == GroupDestination.TABS && group != null) {
-                                // What the group is, where the screen's own tabs can't say it.
-                                Text(
-                                    text = groupStatus(group, model),
-                                    style = SpliitType.Secondary,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            // What the group is, where the screen's own tabs can't say it.
+                            // Shrunk rather than removed, so opening search does not make the
+                            // whole page jump up by a line.
+                            AnimatedVisibility(
+                                visible = destination == GroupDestination.TABS && group != null,
+                                enter = expandVertically(SpliitMotion.spatialDefault()) +
+                                    fadeIn(SpliitMotion.effectsFast()),
+                                exit = shrinkVertically(SpliitMotion.spatialFast()) +
+                                    fadeOut(SpliitMotion.effectsFast()),
+                            ) {
+                                group?.let { GroupSubtitle(group = it, model = model) }
                             }
                         }
                     },
@@ -345,24 +459,116 @@ fun GroupScreen(
                         }
                     },
                     actions = {
-                        // The group's own facts live one step in, behind a gear: the log took the
-                        // fourth tab. The link sits beside it, because handing the group to
-                        // somebody is what a group is for.
                         if (destination == GroupDestination.TABS && group != null) {
-                            IconButton(onClick = { shareOpen = true }) {
-                                Icon(Icons.Filled.Share, contentDescription = "Share group")
+                            // The search bar scrolls under the header, so the header carries a
+                            // small search of its own once it does.
+                            if (searchCollapsed && pagerState.currentPage == 0) {
+                                IconButton(onClick = { destination = GroupDestination.SEARCH }) {
+                                    Icon(
+                                        Icons.Filled.Search,
+                                        contentDescription = "Search expenses",
+                                    )
+                                }
                             }
-                        }
-                        if (destination == GroupDestination.TABS) {
-                            IconButton(onClick = { destination = GroupDestination.SETTINGS }) {
-                                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                            // Everything done to the group rather than inside it, in one menu:
+                            // handing it on, changing what it is, moving its expenses in and out,
+                            // and getting rid of it.
+                            Box {
+                                IconButton(onClick = { groupMenuOpen = true }) {
+                                    Icon(
+                                        Icons.Filled.MoreVert,
+                                        contentDescription = "Group actions",
+                                    )
+                                }
+                                ExpressiveMenu(
+                                    expanded = groupMenuOpen,
+                                    onDismissRequest = { groupMenuOpen = false },
+                                ) {
+                                    ExpressiveMenuItem(
+                                        text = "Share",
+                                        leadingIcon = Icons.Filled.Share,
+                                        onClick = {
+                                            groupMenuOpen = false
+                                            shareOpen = true
+                                        },
+                                    )
+                                    ExpressiveMenuItem(
+                                        text = "Edit group",
+                                        leadingIcon = Icons.Filled.Edit,
+                                        onClick = {
+                                            groupMenuOpen = false
+                                            destination = GroupDestination.SETTINGS
+                                        },
+                                    )
+                                    ExpressiveMenuItem(
+                                        text = if (isImporting) {
+                                            "Importing $importProgress of $importTotal…"
+                                        } else {
+                                            "Import from CSV"
+                                        },
+                                        leadingIcon = Icons.Filled.UploadFile,
+                                        onClick = {
+                                            groupMenuOpen = false
+                                            openCsv.launch(
+                                                arrayOf(
+                                                    "text/csv",
+                                                    "text/comma-separated-values",
+                                                    "text/plain",
+                                                ),
+                                            )
+                                        },
+                                    )
+                                    ExpressiveMenuItem(
+                                        text = if (isExporting) "Preparing the file…" else "Export as CSV",
+                                        leadingIcon = Icons.Filled.FileDownload,
+                                        onClick = {
+                                            groupMenuOpen = false
+                                            exportCsv()
+                                        },
+                                    )
+                                    ExpressiveMenuItem(
+                                        text = "Delete group",
+                                        leadingIcon = Icons.Filled.Delete,
+                                        destructive = true,
+                                        onClick = {
+                                            groupMenuOpen = false
+                                            confirmDeleteGroup = true
+                                        },
+                                    )
+                                }
                             }
                         }
                     },
                 )
+                    // Grown and shrunk rather than added and removed: opening search must not
+                    // move everything below the header in a single frame.
+                    AnimatedVisibility(
+                        visible = destination == GroupDestination.TABS,
+                        enter = expandVertically(SpliitMotion.spatialDefault()) +
+                            fadeIn(SpliitMotion.effectsDefault()),
+                        exit = shrinkVertically(SpliitMotion.spatialFast()) +
+                            fadeOut(SpliitMotion.effectsFast()),
+                    ) {
+                        GroupPillTabs(
+                            selected = pagerState.currentPage,
+                            // The pill rides the page as it is dragged, instead of waiting for
+                            // it to settle and then catching up.
+                            position = pagerState.currentPage +
+                                pagerState.currentPageOffsetFraction,
+                            onSelect = { page ->
+                                scope.launch { pagerState.animateScrollToPage(page) }
+                            },
+                        )
+                    }
+                }
             },
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(padding),
+            ) {
                 when {
                     group == null && model.isLoadingGroup -> GroupPageSkeleton()
 
@@ -379,11 +585,9 @@ fun GroupScreen(
                         AnimatedContent(
                             targetState = destination,
                             transitionSpec = {
-                                (
-                                    fadeIn(SpliitMotion.spatialDefault()) +
-                                        scaleIn(SpliitMotion.spatialDefault(), initialScale = 0.98f)
-                                    ) togetherWith
-                                    fadeOut(SpliitMotion.effectsFast())
+                                // The outgoing page stays put and opaque; only the arriving one
+                                // fades up over it, so the swap never reveals the window.
+                                fadeIn(SpliitMotion.effectsDefault()) togetherWith ExitTransition.None
                             },
                             label = "group destination",
                         ) { target ->
@@ -409,24 +613,8 @@ fun GroupScreen(
                                 )
                             } else {
                             Box(modifier = Modifier.fillMaxSize()) {
-                                // The pages run under the tab bar: a list that stops at the bar
-                                // looks cut off rather than scrolled.
-                                GroupPillTabs(
-                                    selected = pagerState.currentPage,
-                                    // The pill rides the page as it is dragged, instead of
-                                    // waiting for it to settle and then catching up.
-                                    position = pagerState.currentPage +
-                                        pagerState.currentPageOffsetFraction,
-                                    onSelect = { page ->
-                                        scope.launch { pagerState.animateScrollToPage(page) }
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.TopCenter)
-                                        .zIndex(1f),
-                                )
-
                                 // The pages themselves are the gesture: a swipe moves one page
-                                // across, and the row above answers before the page settles.
+                                // across, and the pill in the header answers before they settle.
                                 HorizontalPager(
                                     state = pagerState,
                                     modifier = Modifier.fillMaxSize(),
@@ -442,6 +630,7 @@ fun GroupScreen(
                                             onSearch = {
                                                 destination = GroupDestination.SEARCH
                                             },
+                                            onSearchCollapsed = { searchCollapsed = it },
                                         )
 
                                         1 -> BalancesTab(
@@ -514,10 +703,22 @@ fun GroupScreen(
             onDismissRequest = { if (!isDeletingGroup) confirmDeleteGroup = false },
             title = { Text("Delete this group?") },
             text = {
-                Text(
-                    "“${current.name}” and its expenses will be scheduled for deletion, and " +
-                        "anyone holding its link will lose access.",
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        // The link keeps working through the grace period — the group is only
+                        // given a deletion date — so this must not promise that access ends now.
+                        "“${current.name}” and its expenses will be scheduled for deletion. " +
+                            "Until then, its link still works.",
+                    )
+                    // The server's own rule, said where the decision is made: `groups.delete`
+                    // only sets a deletion date, and a purge deletes what is left after it.
+                    Text(
+                        "Deleting a group starts a 30-day deactivation period. After that, all " +
+                            "of its data is permanently deleted and unrecoverable.",
+                        style = SpliitType.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
@@ -536,6 +737,7 @@ fun GroupScreen(
                                     ),
                                 )
                                 container.recentGroups.forget(groupId)
+                                container.groupCache.forget(groupId)
                                 confirmDeleteGroup = false
                                 onBack()
                             } catch (error: CancellationException) {
@@ -600,6 +802,45 @@ fun GroupScreen(
             onDismiss = { pickerOpen = false },
         )
     }
+
+    pendingImport?.let { rows ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("Import ${rows.size} expenses?") },
+            text = {
+                Text(
+                    "They are added to this group as new expenses, with the people and the " +
+                        "split the file states. Importing twice duplicates them.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { importExpenses(rows) }) { Text("Import") } },
+            dismissButton = { TextButton(onClick = { pendingImport = null }) { Text("Cancel") } },
+        )
+    }
+
+    importSummary?.let { message ->
+        MessageDialog(
+            title = "Imported",
+            message = message,
+            onDismiss = { importSummary = null },
+        )
+    }
+
+    importFailure?.let { message ->
+        MessageDialog(
+            title = "Couldn’t import the expenses",
+            message = message,
+            onDismiss = { importFailure = null },
+        )
+    }
+
+    exportFailure?.let { message ->
+        MessageDialog(
+            title = "Couldn’t export the expenses",
+            message = message,
+            onDismiss = { exportFailure = null },
+        )
+    }
 }
 
 /**
@@ -615,24 +856,18 @@ private fun GroupPillTabs(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            // A fade rather than a solid strip: the page passes behind the bar and disappears
-            // into the background instead of being clipped by an edge.
-            .background(
-                Brush.verticalGradient(
-                    0f to MaterialTheme.colorScheme.background,
-                    0.7f to MaterialTheme.colorScheme.background,
-                    1f to Color.Transparent,
-                ),
-            )
-            .padding(top = 8.dp, bottom = 18.dp)
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(44.dp)) {
+    // No scrim and no fade: the bar sits on its own row of the header, with nothing passing
+    // behind it to hide.
+    Column(modifier = modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+        // 48dp: a tab is a touch target before it is a pill.
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(48.dp)) {
             val itemWidth = maxWidth / GroupTabs.size
             Box(
                 modifier = Modifier
@@ -640,7 +875,7 @@ private fun GroupPillTabs(
                     .width(itemWidth)
                     .fillMaxHeight()
                     .padding(4.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(50)),
+                    .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50)),
             )
             Row(modifier = Modifier.fillMaxSize()) {
                 GroupTabs.forEachIndexed { index, title ->
@@ -654,7 +889,7 @@ private fun GroupPillTabs(
                             .clip(RoundedCornerShape(50))
                             .clickable(
                                 interactionSource = interaction,
-                                indication = null,
+                                indication = LocalIndication.current,
                             ) { onSelect(index) }
                             .pressScale(interaction, pressedScale = 0.94f),
                         contentAlignment = Alignment.Center,
@@ -663,7 +898,7 @@ private fun GroupPillTabs(
                             text = title,
                             style = MaterialTheme.typography.labelMedium,
                             color = if (index == selected) {
-                                MaterialTheme.colorScheme.onSurface
+                                MaterialTheme.colorScheme.onSecondaryContainer
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
@@ -674,15 +909,44 @@ private fun GroupPillTabs(
                 }
             }
         }
+        }
+        Spacer(Modifier.height(SpliitDimens.TabBarGap))
     }
 }
 
-/** "Settled up", or how many people the group has. Never a number with nothing behind it. */
-private fun groupStatus(group: Group, model: GroupScreenModel): String {
-    val balances = model.balances
-    if (balances.isNotEmpty() && balances.values.all { it.total == 0 }) return "Settled up"
-    val count = group.participants.size
-    return if (count == 1) "1 participant" else "$count participants"
+/**
+ * How many people are in the group, and whether this is a copy.
+ *
+ * The count is the one fact the header can give about a group, and it is as true offline as the
+ * snapshot it came from; the word beside it says how fresh that snapshot is.
+ */
+@Composable
+private fun GroupSubtitle(group: Group, model: GroupScreenModel) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            Icons.Filled.People,
+            contentDescription = null,
+            modifier = Modifier.size(13.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        // The count is the point: it is as true offline as the snapshot it came from, so it is
+        // shown whether or not the server answered, with a word when it did not.
+        Text(
+            text = group.participants.size.toString(),
+            style = SpliitType.Secondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (model.isOffline) {
+            Text(
+                text = "· offline",
+                style = SpliitType.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 /** What the form is being opened for: a new expense, an edit, or a settlement. */
@@ -736,13 +1000,12 @@ private fun identityOf(
 /** The group's own facts, one step in from the gear in the toolbar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(
+private fun EditGroupScreen(
     group: Group?,
     model: GroupScreenModel,
     stored: RecentGroup?,
     onBack: () -> Unit,
     onIdentify: () -> Unit,
-    onDeleteGroup: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -750,7 +1013,7 @@ private fun SettingsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
-                title = { Text("Settings") },
+                title = { Text("Edit group", style = SpliitType.Title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -768,7 +1031,6 @@ private fun SettingsScreen(
                     model = model,
                     stored = stored,
                     onIdentify = onIdentify,
-                    onDeleteGroup = onDeleteGroup,
                 )
             }
         }
@@ -785,15 +1047,9 @@ private fun SettingsTab(
     model: GroupScreenModel,
     stored: RecentGroup?,
     onIdentify: () -> Unit,
-    onDeleteGroup: () -> Unit,
 ) {
     val identity = identityOf(stored, group)
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var isExporting by remember { mutableStateOf(false) }
-    var exportFailure by remember { mutableStateOf<String?>(null) }
-    // The file waits here between the tap and the moment a place to put it is chosen.
-    var pendingCsv by remember { mutableStateOf<String?>(null) }
 
     // The group's own facts, edited where they are read: the fields are the screen.
     var draft by remember(group.id) { mutableStateOf(GroupFormDraft.editing(group)) }
@@ -823,47 +1079,16 @@ private fun SettingsTab(
         }
     }
 
-    val createCsv = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/csv"),
-    ) { uri ->
-        val csv = pendingCsv
-        pendingCsv = null
-        if (uri == null || csv == null) return@rememberLauncherForActivityResult
-        runCatching {
-            context.contentResolver.openOutputStream(uri)?.use { stream ->
-                stream.write(csv.toByteArray(Charsets.UTF_8))
-            } ?: error("The chosen file could not be opened.")
-        }.onFailure { error ->
-            exportFailure = error.localizedMessage ?: "Couldn’t write the file."
-        }
-    }
-
-    fun exportCsv() {
-        if (isExporting) return
-        isExporting = true
-        scope.launch {
-            try {
-                val csv = model.exportCsv()
-                pendingCsv = csv
-                createCsv.launch(GroupExport.fileName(group.name))
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                exportFailure = error.localizedMessage ?: "Couldn’t export the expenses."
-            } finally {
-                isExporting = false
-            }
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Card {
+        // Every card is a side of the one above or below it, so the page reads as one grouped
+        // list rather than a scattering of tiles.
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Card(first = true) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Group", style = SpliitType.SectionHeader)
@@ -1011,13 +1236,8 @@ private fun SettingsTab(
                 }
             }
 
-            Card {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Fact("Created", dateLabel(group.createdAt))
-                    model.instanceUrl?.let { Fact("Server", ServerInstance.displayName(it)) }
-                }
-            }
-
+        // Who the person holding the phone is in this group: the identity a new expense starts
+        // from, and the only thing the app needs to answer "am I owed?".
         Card {
             Row(
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onIdentify),
@@ -1043,27 +1263,11 @@ private fun SettingsTab(
             }
         }
 
-        Card {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Manage", style = SpliitType.SectionHeader)
-                SettingsAction(
-                    title = "Export as CSV",
-                    subtitle = if (isExporting) {
-                        "Preparing the file…"
-                    } else {
-                        "Every expense, one row each, one column per participant"
-                    },
-                    icon = Icons.Filled.FileDownload,
-                    busy = isExporting,
-                    onClick = { exportCsv() },
-                )
-                SettingsAction(
-                    title = "Delete group",
-                    subtitle = "Scheduled for deletion, with its expenses",
-                    icon = Icons.Filled.Delete,
-                    tint = MaterialTheme.colorScheme.error,
-                    onClick = onDeleteGroup,
-                )
+        // The group's own history, last: it is read once, not changed here.
+        Card(last = true) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Fact("Created", dateLabel(group.createdAt))
+                model.instanceUrl?.let { Fact("Server", ServerInstance.displayName(it)) }
             }
         }
     }
@@ -1087,68 +1291,6 @@ private fun SettingsTab(
         )
     }
 
-    exportFailure?.let { message ->
-        MessageDialog(
-            title = "Couldn’t export the expenses",
-            message = message,
-            onDismiss = { exportFailure = null },
-        )
-    }
-}
-
-/** One thing a settings screen can *do*, as opposed to read. */
-@Composable
-private fun SettingsAction(
-    title: String,
-    subtitle: String? = null,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    tint: Color = Color.Unspecified,
-    busy: Boolean = false,
-) {
-    val destructive = tint != Color.Unspecified
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (destructive) tint else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = SpliitType.RowTitle,
-                color = if (destructive) tint else MaterialTheme.colorScheme.onSurface,
-            )
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = SpliitType.Secondary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (busy) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
 }
 
 @Composable
@@ -1184,16 +1326,29 @@ private fun settingsCurrencySummary(draft: GroupFormDraft): String {
 }
 
 @Composable
-private fun Card(content: @Composable () -> Unit) {
+private fun Card(
+    first: Boolean = false,
+    last: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(
+            topStart = if (first) SettingsCardCorner else SettingsSharedCorner,
+            topEnd = if (first) SettingsCardCorner else SettingsSharedCorner,
+            bottomStart = if (last) SettingsCardCorner else SettingsSharedCorner,
+            bottomEnd = if (last) SettingsCardCorner else SettingsSharedCorner,
+        ),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 0.dp,
     ) {
         Box(modifier = Modifier.padding(16.dp)) { content() }
     }
 }
+
+/** The corners a settings card owns at the ends of the stack, and shares in the middle. */
+private val SettingsCardCorner = 22.dp
+private val SettingsSharedCorner = 10.dp
 
 @Composable
 private fun Fact(label: String, value: String) {
@@ -1254,13 +1409,12 @@ private fun SettingsSkeleton() {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        SkeletonSection()
-        SkeletonCard(height = 56.dp)
-        SkeletonCard(height = 56.dp)
-        SkeletonSection(modifier = Modifier.padding(top = 10.dp))
-        SkeletonCard(height = 76.dp)
-        SkeletonCard(height = 56.dp)
+        SkeletonSection(modifier = Modifier.padding(bottom = 8.dp))
+        SkeletonCard(height = 180.dp, shape = RoundedCornerShape(22.dp))
+        SkeletonCard(height = 56.dp, shape = RoundedCornerShape(10.dp))
+        SkeletonCard(height = 76.dp, shape = RoundedCornerShape(10.dp))
+        SkeletonCard(height = 56.dp, shape = RoundedCornerShape(22.dp))
     }
 }

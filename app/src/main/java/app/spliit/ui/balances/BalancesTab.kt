@@ -1,6 +1,12 @@
 package app.spliit.ui.balances
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -24,7 +30,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -37,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Balance
 import app.spliit.data.model.Group
@@ -45,6 +51,9 @@ import app.spliit.data.model.Reimbursement
 import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.ExpandChevron
+import app.spliit.ui.theme.SpliitDimens
+import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySign
@@ -117,8 +126,6 @@ private fun BalancesContent(
 
     LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            // Clear of the floating tab bar, which the list scrolls behind.
-            contentPadding = PaddingValues(top = 60.dp),
         ) {
         item(key = "you-header") { SectionHeader("You") }
         item(key = "you-card") {
@@ -130,59 +137,143 @@ private fun BalancesContent(
             )
         }
         item(key = "balances-header") { SectionHeader("Balances") }
-        item(key = "balances-card") {
-            BalancesCard(
-                participants = group.participants,
-                balances = model.balances,
+        // One card per person, stacked like the home list: a shared side takes the small
+        // corner, so a section reads as one group of cards instead of a ledger of hairlines.
+        itemsIndexed(
+            items = group.participants,
+            key = { _, participant -> "balance-${participant.id}" },
+        ) { index, participant ->
+            BalanceCard(
+                participant = participant,
+                position = index,
+                balance = model.balances[participant.id] ?: Balance(0, 0, 0),
                 largest = largest,
-                identityId = identity?.id,
+                isYou = identity?.id == participant.id,
                 formatter = model.moneyFormatter,
+                first = index == 0,
+                last = index == group.participants.lastIndex,
             )
         }
-        item(key = "settle-header") {
-            SuggestedHeader(
+        // One card, header and rows together: the button and what it opens are the same
+        // container, so the list it unfolds cannot read as a separate section that happens to
+        // start where the button ends.
+        item(key = "suggested") {
+            SuggestedPaymentsCard(
                 expanded = suggestedOpen,
                 remaining = model.reimbursements.size,
                 onToggle = { suggestedOpen = !suggestedOpen },
+                model = model,
+                group = group,
+                onSettle = onSettle,
             )
-        }
-        if (suggestedOpen) {
-            if (model.reimbursements.isEmpty()) {
-                item(key = "settled") {
-                    Text(
-                        text = "Everyone is settled up.",
-                        style = SpliitType.Secondary,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    )
-                }
-            } else {
-                reimbursementItems(model, group, onSettle)
-            }
         }
 
         item(key = "bottom") { Spacer(Modifier.height(24.dp)) }
     }
 }
 
-/** A `items` overload for reimbursements, which have no identity of their own beyond position. */
-private fun androidx.compose.foundation.lazy.LazyListScope.reimbursementItems(
+/**
+ * "Suggested payments" and the payments it suggests, in one card.
+ *
+ * The header is the card's first row and the payments are its body, so opening it grows the card
+ * instead of appending cards that merely sit near it. The rows inside take the card's own width
+ * minus a small inset, which is the grouped-list shape the sections above already use.
+ */
+@Composable
+private fun SuggestedPaymentsCard(
+    expanded: Boolean,
+    remaining: Int,
+    onToggle: () -> Unit,
     model: GroupScreenModel,
     group: Group,
     onSettle: (Reimbursement) -> Unit,
 ) {
-    items(model.reimbursements) { reimbursement ->
-        ReimbursementCard(
-            reimbursement = reimbursement,
-            from = model.participant(reimbursement.from),
-            fromPosition = model.participantPosition(reimbursement.from),
-            to = model.participant(reimbursement.to),
-            toPosition = model.participantPosition(reimbursement.to),
-            amount = model.moneyFormatter.string(reimbursement.amount),
-            onSettle = { onSettle(reimbursement) },
-        )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = SpliitDimens.ScreenGutter)
+            .padding(top = 4.dp, bottom = 2.dp),
+        shape = RoundedCornerShape(SpliitDimens.CardCorner),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = SpliitDimens.CardPadding, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Suggested payments", style = SpliitType.RowTitle)
+                    Text(
+                        text = if (remaining == 0) {
+                            "Nothing left to pay"
+                        } else if (remaining == 1) {
+                            "1 payment would settle everyone"
+                        } else {
+                            "$remaining payments would settle everyone"
+                        },
+                        style = SpliitType.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                ExpandChevron(expanded = expanded)
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(SpliitMotion.spatialDefault()) +
+                    fadeIn(SpliitMotion.effectsDefault()),
+                exit = shrinkVertically(SpliitMotion.spatialDefault()) +
+                    fadeOut(SpliitMotion.effectsFast()),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(SpliitDimens.CardGap),
+                ) {
+                    if (model.reimbursements.isEmpty()) {
+                        Text(
+                            text = "Everyone is settled up.",
+                            style = SpliitType.Secondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        )
+                    }
+                    model.reimbursements.forEachIndexed { index, reimbursement ->
+                        ReimbursementCard(
+                            reimbursement = reimbursement,
+                            from = model.participant(reimbursement.from),
+                            fromPosition = model.participantPosition(reimbursement.from),
+                            to = model.participant(reimbursement.to),
+                            toPosition = model.participantPosition(reimbursement.to),
+                            amount = model.moneyFormatter.string(reimbursement.amount),
+                            shape = stackedShape(
+                                first = index == 0,
+                                last = index == model.reimbursements.lastIndex,
+                            ),
+                            horizontalPadding = 0.dp,
+                            onSettle = { onSettle(reimbursement) },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
+
+/** The two corners a stacked card owns, and the two it shares with the card beside it. */
+private fun stackedShape(first: Boolean, last: Boolean): RoundedCornerShape = RoundedCornerShape(
+    topStart = if (first) CardCorner else AdjacentCorner,
+    topEnd = if (first) CardCorner else AdjacentCorner,
+    bottomStart = if (last) CardCorner else AdjacentCorner,
+    bottomEnd = if (last) CardCorner else AdjacentCorner,
+)
+
+private val CardCorner = 22.dp
+private val AdjacentCorner = 10.dp
 
 /**
  * The reader's own balance, and the way into the payments that would settle it.
@@ -209,7 +300,7 @@ private fun YouCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(CardCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
@@ -257,43 +348,34 @@ private fun YouCard(
     }
 }
 
-/**
- * Everyone's balance, in one card: a row per person, split by hairlines, so the set reads as a
- * single ledger rather than a pile of separate cards.
- */
+/** One person's card: their line in the balances, on a surface of their own. */
 @Composable
-private fun BalancesCard(
-    participants: List<Participant>,
-    balances: Map<String, Balance>,
+private fun BalanceCard(
+    participant: Participant,
+    position: Int,
+    balance: Balance,
     largest: Int,
-    identityId: String?,
+    isYou: Boolean,
     formatter: app.spliit.domain.MoneyFormatter,
+    first: Boolean,
+    last: Boolean,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
+            .padding(horizontal = 16.dp)
+            .padding(top = if (first) 4.dp else 0.dp, bottom = 2.dp),
+        shape = stackedShape(first = first, last = last),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column {
-            participants.forEachIndexed { index, participant ->
-                if (index > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 50.dp, end = 14.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                    )
-                }
-                BalanceRow(
-                    participant = participant,
-                    position = index,
-                    balance = balances[participant.id] ?: Balance(0, 0, 0),
-                    largest = largest,
-                    isYou = identityId == participant.id,
-                    formatter = formatter,
-                )
-            }
-        }
+        BalanceRow(
+            participant = participant,
+            position = position,
+            balance = balance,
+            largest = largest,
+            isYou = isYou,
+            formatter = formatter,
+        )
     }
 }
 
@@ -327,7 +409,7 @@ private fun BalanceRow(
                     Spacer(Modifier.width(6.dp))
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     ) {
                         Text(
                             text = "You",
@@ -379,53 +461,6 @@ private fun DivergingBar(fraction: Float, total: Int) {
     }
 }
 
-/** "Suggested payments", and the whole section folded into it. */
-@Composable
-private fun SuggestedHeader(expanded: Boolean, remaining: Int, onToggle: () -> Unit) {
-    Surface(
-        onClick = onToggle,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Suggested payments", style = SpliitType.RowTitle)
-                Text(
-                    text = if (remaining == 0) {
-                        "Nothing left to pay"
-                    } else if (remaining == 1) {
-                        "1 payment would settle everyone"
-                    } else {
-                        "$remaining payments would settle everyone"
-                    },
-                    style = SpliitType.Secondary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(
-                imageVector = if (expanded) {
-                    Icons.Filled.KeyboardArrowUp
-                } else {
-                    Icons.Filled.KeyboardArrowDown
-                },
-                contentDescription = if (expanded) {
-                    "Collapse suggested payments"
-                } else {
-                    "Expand suggested payments"
-                },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
 @Composable
 private fun ReimbursementCard(
     reimbursement: Reimbursement,
@@ -434,13 +469,16 @@ private fun ReimbursementCard(
     to: Participant?,
     toPosition: Int,
     amount: String,
+    shape: RoundedCornerShape,
+    horizontalPadding: Dp = SpliitDimens.ScreenGutter,
     onSettle: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
+            .padding(horizontal = horizontalPadding)
+            .padding(top = 4.dp, bottom = 2.dp),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
@@ -487,7 +525,7 @@ private fun BalancesSkeleton() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = 16.dp, end = 16.dp, top = 68.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SkeletonCard(height = 132.dp, shape = RoundedCornerShape(24.dp))

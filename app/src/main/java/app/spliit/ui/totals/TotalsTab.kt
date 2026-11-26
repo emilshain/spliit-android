@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.BarChart
@@ -25,6 +26,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Participant
@@ -49,6 +53,7 @@ import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonSection
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import kotlin.math.abs
@@ -141,6 +146,7 @@ private fun TotalsContent(
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
+    val refreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
@@ -154,16 +160,22 @@ private fun TotalsContent(
                 }
             }
         },
+        state = refreshState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = refreshState,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            // Clear of the floating tab bar, which the list scrolls behind.
-            contentPadding = PaddingValues(top = 60.dp),
         ) {
             item(key = "group") {
                 SectionHeader("The group")
-                TotalsCard {
+                TotalsCard(shape = RoundedCornerShape(CardCorner)) {
                     TotalFigure(
                         label = if (stats.totalGroupSpendings < 0) {
                             "Total group earnings"
@@ -182,7 +194,7 @@ private fun TotalsContent(
                 val spendings = stats.totalParticipantSpendings
                 val share = stats.totalParticipantShare?.takeIf { it.isFinite() }?.roundToInt()
 
-                TotalsCard {
+                TotalsCard(shape = RoundedCornerShape(CardCorner)) {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (identity != null && spendings != null) {
                             TotalFigure(
@@ -209,15 +221,32 @@ private fun TotalsContent(
 
             if (model.categorySpendingReconciles) {
                 item(key = "categories-header") { SectionHeader("By category") }
-                model.categorySpending.forEach { spending ->
-                    item(key = "category-${spending.categoryId}") {
-                        TotalsCard {
-                            CategoryRow(
-                                spending = spending,
-                                groupTotal = stats.totalGroupSpendings,
-                                formatter = model.moneyFormatter,
-                            )
-                        }
+                // The categories are one stack: shared sides take the small corner, the ends
+                // take the card's own.
+                itemsIndexed(
+                    items = model.categorySpending,
+                    key = { _, spending -> "category-${spending.categoryId}" },
+                ) { index, spending ->
+                    val shape = RoundedCornerShape(
+                        topStart = if (index == 0) CardCorner else AdjacentCorner,
+                        topEnd = if (index == 0) CardCorner else AdjacentCorner,
+                        bottomStart = if (index == model.categorySpending.lastIndex) {
+                            CardCorner
+                        } else {
+                            AdjacentCorner
+                        },
+                        bottomEnd = if (index == model.categorySpending.lastIndex) {
+                            CardCorner
+                        } else {
+                            AdjacentCorner
+                        },
+                    )
+                    TotalsCard(shape = shape) {
+                        CategoryRow(
+                            spending = spending,
+                            groupTotal = stats.totalGroupSpendings,
+                            formatter = model.moneyFormatter,
+                        )
                     }
                 }
             } else if (model.isLoadingCategorySpending) {
@@ -252,17 +281,21 @@ private fun TotalsContent(
 
 /** One block of figures, on a card like the expenses and the balances use. */
 @Composable
-private fun TotalsCard(content: @Composable () -> Unit) {
+private fun TotalsCard(shape: Shape, content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(20.dp),
+            .padding(horizontal = 16.dp)
+            .padding(top = 4.dp, bottom = 2.dp),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Box(modifier = Modifier.padding(18.dp)) { content() }
     }
 }
+
+private val CardCorner = 22.dp
+private val AdjacentCorner = 10.dp
 
 @Composable
 private fun TotalFigure(
@@ -332,7 +365,10 @@ private fun CategoryRow(
         Box(
             modifier = Modifier
                 .size(26.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
+                .background(
+                    MaterialTheme.colorScheme.surfaceContainerHighest,
+                    RoundedCornerShape(8.dp),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -397,7 +433,7 @@ private fun SliceBar(fraction: Float) {
         modifier = Modifier
             .fillMaxWidth()
             .height(6.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(50)),
     ) {
         if (grown > 0f) {
             Box(
@@ -432,7 +468,7 @@ private fun TotalsSkeleton() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = 16.dp, end = 16.dp, top = 68.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SkeletonSection()
