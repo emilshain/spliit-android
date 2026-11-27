@@ -185,8 +185,9 @@ fun ExpenseRow(
 @Composable
 private fun CategoryGlyph(expense: ExpenseListItem, payerPosition: Int) {
     // The tile is tinted with the colour of whoever paid: the row is about them, and the dot that
-    // used to say so beside the line is now this.
-    val tint = LocalSpliitColors.current.monogramFill(
+    // used to say so beside the line is now this. The ink, not the fill — deep on a light card,
+    // light on a dark one — so the glyph stays legible in both modes.
+    val tint = LocalSpliitColors.current.monogramInk(
         MonogramPalette.indexAtPosition(payerPosition),
     )
     Box(

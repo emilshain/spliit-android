@@ -72,6 +72,36 @@ object SpliitPalette {
     )
 
 
+    /**
+     * The same eight hues as ink on a card rather than as a fill.
+     *
+     * A glyph tinted with a person's colour has to be legible on the card behind it, and the
+     * monogram fills cannot do that in both themes: emerald is right on white and too dark on a
+     * dark card, amber is right on black and washes out on a light one. So each mode gets its
+     * own tone of the same hue — deep in light, light in dark.
+     */
+    val MonogramInksLight: List<Color> = listOf(
+        Color(0xFF047857), // emerald
+        Color(0xFF0E7490), // cyan
+        Color(0xFF4F46E5), // indigo
+        Color(0xFF9D174D), // pink
+        Color(0xFFC2410C), // orange
+        Color(0xFFA16207), // amber
+        Color(0xFF4D7C0F), // olive
+        Color(0xFF6D28D9), // violet
+    )
+
+    val MonogramInksDark: List<Color> = listOf(
+        Color(0xFF34D399), // emerald
+        Color(0xFF22D3EE), // cyan
+        Color(0xFFA5B4FC), // indigo
+        Color(0xFFF9A8D4), // pink
+        Color(0xFFFDBA74), // orange
+        Color(0xFFFDE047), // amber
+        Color(0xFFBEF264), // olive
+        Color(0xFFC4B5FD), // violet
+    )
+
     private val Light = lightColorScheme(
         primary = AccentLight,
         onPrimary = Color.White,
@@ -155,10 +185,14 @@ data class SpliitColors(
     val brandOnAccentSoft: Color,
     val monogramFills: List<Color>,
     val monogramOns: List<Color>,
+    /** The same people's colours as ink on a card: dark in light mode, light in dark. */
+    val monogramInks: List<Color>,
 ) {
     fun monogramFill(index: Int): Color = monogramFills.at(index)
 
     fun monogramOn(index: Int): Color = monogramOns.at(index)
+
+    fun monogramInk(index: Int): Color = monogramInks.at(index)
 
     private fun List<Color>.at(index: Int): Color = this[((index % size) + size) % size]
 }
@@ -175,6 +209,7 @@ private val BrandLight = SpliitColors(
     brandOnAccentSoft = SpliitPalette.AccentLight,
     monogramFills = SpliitMonograms,
     monogramOns = SpliitMonogramOns,
+    monogramInks = SpliitPalette.MonogramInksLight,
 )
 
 private val BrandDark = SpliitColors(
@@ -185,6 +220,7 @@ private val BrandDark = SpliitColors(
     brandOnAccentSoft = SpliitPalette.AccentDark,
     monogramFills = SpliitMonograms,
     monogramOns = SpliitMonogramOns,
+    monogramInks = SpliitPalette.MonogramInksDark,
 )
 
 /**
@@ -221,6 +257,18 @@ private fun templateColors(scheme: ColorScheme): SpliitColors = SpliitColors(
         scheme.onTertiary,
         scheme.onErrorContainer,
         scheme.inverseOnSurface,
+    ),
+    // The accents rather than their containers: those are already the mode's own tone, so they
+    // are dark on a light card and light on a dark one without a second palette.
+    monogramInks = listOf(
+        scheme.primary,
+        scheme.secondary,
+        scheme.tertiary,
+        scheme.primary,
+        scheme.secondary,
+        scheme.tertiary,
+        scheme.error,
+        scheme.onSurfaceVariant,
     ),
 )
 
