@@ -2,6 +2,7 @@ package app.spliit
 
 import android.content.Context
 import app.spliit.data.local.AppearanceSettings
+import app.spliit.data.local.ConnectivityMonitor
 import app.spliit.data.local.ExpenseOutbox
 import app.spliit.data.local.GroupCache
 import app.spliit.data.local.RecentGroupsRepository
@@ -35,6 +36,8 @@ class AppContainer(
     val groupCache: GroupCache = GroupCache(context.applicationContext),
     /** Expense changes that could not be sent yet, kept until an instance answers. */
     val outbox: ExpenseOutbox = ExpenseOutbox(context.applicationContext),
+    /** When a network comes back, so the backlog can go without reopening a screen. */
+    val connectivity: ConnectivityMonitor = ConnectivityMonitor(context.applicationContext),
 ) {
 
     val serverSettings = serverSettingsStore

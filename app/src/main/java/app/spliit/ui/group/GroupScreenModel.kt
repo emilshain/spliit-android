@@ -13,6 +13,7 @@ import app.spliit.data.model.Balance
 import app.spliit.data.model.ExpenseCategory
 import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.ExpenseListItem
+import app.spliit.data.model.ExpenseShareRow
 import app.spliit.data.model.Group
 import app.spliit.data.model.GroupStatsResponse
 import app.spliit.data.model.Participant
@@ -42,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.io.IOException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -145,6 +147,63 @@ class GroupScreenModel(
     val didFailToLoadBalances: Boolean
         get() = !didLoadBalances && balancesFailure != null
 
+    /**
+     * What each person paid and what they carry, folded from the expenses on screen.
+     *
+     * The server answers what the group spent and what one participant spent, but nothing that
+     * puts a name on every other row. This is the same fold the web app's totals page draws its
+     * participant section from: reimbursements are not spending, and a person's share is the
+     * apportionment the balances tab charges them.
+     */
+    val participantTotals: List<ParticipantTotal>
+        get() {
+            val currentGroup = group ?: return emptyList()
+            // The sweep over every page fills these; until it has, the rows on hand answer.
+            participantSums?.let { sums ->
+                return currentGroup.participants
+                    .mapIndexed { position, participant ->
+                        ParticipantTotal(
+                            participant = participant,
+                            position = position,
+                            paid = sums.paid[participant.id] ?: 0,
+                            share = sums.share[participant.id] ?: 0,
+                        )
+                    }
+                    .sortedWith(
+                        compareByDescending<ParticipantTotal> { it.paid }
+                            .thenBy { it.position },
+                    )
+            }
+            val counted = displayExpenses.filterNot { it.isReimbursement }
+            val paid = HashMap<String, Int>()
+            val share = HashMap<String, Int>()
+            for (expense in counted) {
+                paid[expense.paidBy.id] = (paid[expense.paidBy.id] ?: 0) + expense.amount
+                val parts = ExpenseShares.shares(
+                    expense.id,
+                    expense.amount,
+                    expense.splitMode,
+                    expense.paidFor,
+                )
+                for ((id, amount) in parts) {
+                    share[id] = (share[id] ?: 0) + amount
+                }
+            }
+            return currentGroup.participants
+                .mapIndexed { position, participant ->
+                    ParticipantTotal(
+                        participant = participant,
+                        position = position,
+                        paid = paid[participant.id] ?: 0,
+                        share = share[participant.id] ?: 0,
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<ParticipantTotal> { it.paid }
+                        .thenBy { it.position },
+                )
+        }
+
     /** Expenses grouped into the sections the list shows, newest bucket first. */
     val sections: List<ExpenseSection>
         get() = sectionsOf(displayExpenses)
@@ -176,9 +235,58 @@ class GroupScreenModel(
 
     fun participant(id: String): Participant? = group?.participants?.firstOrNull { it.id == id }
 
-    /** One expense, for the edit form. Null when it has gone or the server refused. */
-    suspend fun expense(id: String): ExpenseDetails? =
-        runCatching { client?.call(SpliitApi.expense(groupId, id))?.expense }.getOrNull()
+    /**
+     * One expense, for its page and the edit form.
+     *
+     * A detail that has been read once is kept in the snapshot, so the page still opens with no
+     * network; a change still waiting to be sent is drawn from the outbox, because it has never
+     * been on the server to be read back.
+     */
+    suspend fun expense(id: String): ExpenseDetails? {
+        val cached = container.groupCache.load(groupId)?.details?.get(id)
+        val current = client ?: return cached ?: pendingDetail(id)
+        if (isOffline) return cached ?: pendingDetail(id)
+        val loaded = runCatching {
+            current.call(SpliitApi.expense(groupId, id)).expense
+        }.getOrNull()
+        if (loaded != null) {
+            container.groupCache.saveDetail(groupId, loaded)
+            return loaded
+        }
+        return cached ?: pendingDetail(id)
+    }
+
+    /** The detail of a change that has not reached the server, built from what it will send. */
+    private fun pendingDetail(id: String): ExpenseDetails? {
+        val currentGroup = group ?: return null
+        val pending = container.outbox.forGroup(groupId).firstOrNull { it.key == id } ?: return null
+        val payer = currentGroup.participants.firstOrNull { it.id == pending.paidById }
+            ?: Participant(id = pending.paidById, name = "Someone")
+        val category = pending.categoryId.takeIf { it != 0 }?.let {
+            ExpenseCategory(
+                id = it,
+                grouping = pending.categoryGrouping ?: "Uncategorized",
+                name = pending.categoryName ?: "General",
+            )
+        }
+        return ExpenseDetails(
+            id = pending.key,
+            groupId = groupId,
+            title = pending.title,
+            amount = pending.amount,
+            categoryId = pending.categoryId,
+            category = category,
+            expenseDate = Instant.ofEpochMilli(pending.expenseDateEpochMillis),
+            createdAt = Instant.ofEpochMilli(pending.queuedAtEpochMillis),
+            paidById = pending.paidById,
+            paidBy = payer,
+            paidFor = pending.paidFor.map { share ->
+                ExpenseDetails.PaidFor(share.participantId, share.shares)
+            },
+            isReimbursement = pending.isReimbursement,
+            splitMode = pending.splitMode,
+        )
+    }
 
     /** Where someone sits in the group's participant list, which is what their colour comes from. */
     fun participantPosition(id: String): Int =
@@ -194,6 +302,17 @@ class GroupScreenModel(
             refreshActor()
             reload()
         }
+    }
+
+    /**
+     * A network has come back: send the backlog, and re-read the group if it was showing a copy.
+     *
+     * Driven by the screen, not by this model's scope: an observer of a flow that never ends
+     * belongs to the screen that is watching it.
+     */
+    fun retryWhenBackOnline() {
+        if (!isOffline && pendingExpenses.isEmpty()) return
+        scope.launch { reload() }
     }
 
     suspend fun refreshActor() {
@@ -298,6 +417,10 @@ class GroupScreenModel(
     /** Writes the group as it stands, so the next launch has something to open. */
     private fun persistSnapshot() {
         val currentGroup = group ?: return
+        // Details are another reader's cache; this write must not drop them.
+        val keptDetails = runCatching {
+            container.groupCache.load(groupId)?.details.orEmpty()
+        }.getOrDefault(emptyMap())
         container.groupCache.save(
             CachedGroup(
                 group = currentGroup,
@@ -309,6 +432,9 @@ class GroupScreenModel(
                 savedAtEpochMillis = System.currentTimeMillis(),
                 hasMoreExpenses = hasMoreExpenses,
                 nextCursor = nextCursor,
+                stats = stats,
+                categorySpending = categorySpending,
+                details = keptDetails,
             ),
         )
     }
@@ -325,6 +451,16 @@ class GroupScreenModel(
         categories = snapshot.categories
         activities = snapshot.activities
         if (snapshot.activities.isNotEmpty()) didLoadActivities = true
+        snapshot.stats?.let { saved ->
+            stats = saved
+            statsAreLocal = false
+            statsParticipantId = null
+            didRequestStats = true
+        }
+        if (snapshot.categorySpending.isNotEmpty()) {
+            categorySpending = snapshot.categorySpending
+            didLoadCategorySpending = true
+        }
         nextCursor = snapshot.nextCursor
         hasMoreExpenses = false
         didLoadExpenses = true
@@ -504,6 +640,9 @@ class GroupScreenModel(
 
     private suspend fun reloadAfterExpenseChangeNow() {
         val current = client ?: return
+        // The change just made may already be in the outbox - the save that could not be sent
+        // is still a change the person expects to see.
+        refreshPending()
         coroutineScope {
             listOf(
                 async { loadFirstPage(current) },
@@ -515,7 +654,12 @@ class GroupScreenModel(
         }
         // The snapshot is what the page shows next time it opens with no network, so a change
         // written here has to reach it too - otherwise going offline would undo the edit.
-        if (!isOffline) persistSnapshot()
+        if (!isOffline) {
+            // Anything queued elsewhere on the screen (a delete, an import) goes now too.
+            if (flushPendingExpenses()) loadFirstPage(current)
+            persistSnapshot()
+        }
+        refreshPending()
     }
 
     private suspend fun loadGroup(client: TrpcClient) {
@@ -635,6 +779,8 @@ class GroupScreenModel(
 
     private var statsParticipantId: String? = null
     private var didRequestStats = false
+    /** The figures on screen are this session's own fold, not an answer from the server. */
+    private var statsAreLocal = false
 
     val didFailToLoadStats: Boolean get() = stats == null && statsFailure != null && !statsUnavailable
 
@@ -657,6 +803,14 @@ class GroupScreenModel(
         isLoadingStats = true
         statsFailure = null
 
+        // The figures the cached expenses already answer go up before the request: the tab is
+        // worth reading immediately, and the server's answer replaces them when it lands.
+        if (stats == null) {
+            stats = localStats(participantId)
+            statsAreLocal = true
+            statsUnavailable = false
+        }
+
         // With no network there is still an answer: the cached expenses are enough to total, and
         // a stale total that adds up beats a page saying it could not be read.
         if (isOffline) {
@@ -671,11 +825,15 @@ class GroupScreenModel(
             // The picker may have moved on while this was in flight; somebody else's share must
             // not become the answer under your name.
             if (statsParticipantId != participantId) return
-            stats = response
+            stats = withPendingStats(response, participantId)
+            statsAreLocal = false
             statsUnavailable = false
         } catch (error: CancellationException) {
             throw error
         } catch (error: TrpcServerException) {
+            // A request that failed is not a total: the local seed must not stand in for an
+            // answer the server refused, or the tab would show a number it cannot vouch for.
+            if (statsParticipantId == participantId && statsAreLocal) stats = null
             if (!error.isUnknownProcedure) {
                 if (statsParticipantId == participantId) statsFailure = error.localizedMessage
                 return
@@ -688,8 +846,10 @@ class GroupScreenModel(
                 if (group != null && isOfflineNetworkFailure(error)) {
                     isOffline = true
                     stats = localStats(participantId)
+                    statsAreLocal = true
                     statsFailure = null
                 } else {
+                    if (statsAreLocal) stats = null
                     statsFailure = error.localizedMessage
                 }
             }
@@ -706,7 +866,8 @@ class GroupScreenModel(
      * exactly the data the rest of the screen is showing.
      */
     private fun localStats(participantId: String?): GroupStatsResponse {
-        val counted = expenses.filterNot { it.isReimbursement }
+        // `displayExpenses`, not `expenses`: a change waiting to be sent is spending too.
+        val counted = displayExpenses.filterNot { it.isReimbursement }
         val groupSpendings = counted.sumOf { it.amount }
         val spendings = participantId?.let { id ->
             counted.filter { it.paidBy.id == id }.sumOf { it.amount }
@@ -725,6 +886,49 @@ class GroupScreenModel(
             totalGroupSpendings = groupSpendings,
             totalParticipantSpendings = spendings,
             totalParticipantShare = share,
+        )
+    }
+
+    /**
+     * The server's totals with the changes still waiting added in.
+     *
+     * A queued create has been saved, so it is spending — the server simply has not seen it yet.
+     * Only creates are added: an edit keeps the server's own row, and a delete is already off the
+     * list. Adding them here is what makes the totals agree with the rows on screen.
+     */
+    private fun withPendingStats(
+        response: GroupStatsResponse,
+        participantId: String?,
+    ): GroupStatsResponse {
+        val queued = pendingExpenses.filter {
+            it.kind == PendingExpense.Kind.CREATE && !it.isReimbursement
+        }
+        if (queued.isEmpty()) return response
+        val group = queued.sumOf { it.amount }
+        val spent = participantId?.let { id ->
+            queued.filter { it.paidById == id }.sumOf { it.amount }
+        }
+        val share = participantId?.let { id ->
+            queued.sumOf { pending ->
+                ExpenseShares.shares(
+                    pending.key,
+                    pending.amount,
+                    pending.splitMode,
+                    pending.paidFor.map { row ->
+                        object : ExpenseShareRow {
+                            override val participantId: String = row.participantId
+                            override val shares: Int = row.shares
+                        }
+                    },
+                )[id] ?: 0
+            }
+        }?.toDouble()
+        return GroupStatsResponse(
+            totalGroupSpendings = response.totalGroupSpendings + group,
+            totalParticipantSpendings = response.totalParticipantSpendings
+                ?.let { it + (spent ?: 0) },
+            totalParticipantShare = response.totalParticipantShare
+                ?.let { it + (share ?: 0.0) },
         )
     }
 
@@ -756,6 +960,9 @@ class GroupScreenModel(
         private set
 
     private var didLoadCategorySpending = false
+
+    /** Who paid what, summed over every page the sweep walked. Null until it has. */
+    private var participantSums: ParticipantSums? = null
 
     /**
      * True once every expense has been folded in and the result adds up.
@@ -790,15 +997,35 @@ class GroupScreenModel(
         isLoadingCategorySpending = true
         categorySpendingFailure = null
 
+        // What the expenses on hand already say goes up first; the sweep replaces it when it
+        // lands. The section only draws once it reconciles with the group total either way.
+        if (categorySpending.isEmpty()) {
+            categorySpending = CategorySpending.breakdownOf(displayExpenses)
+        }
+
         // Offline the sweep is the same fold over what is already on hand.
         if (isOffline) {
-            categorySpending = CategorySpending.Fold().apply { add(expenses) }.breakdown
+            categorySpending = CategorySpending.breakdownOf(displayExpenses)
             didLoadCategorySpending = true
             isLoadingCategorySpending = false
             return
         }
 
         val fold = CategorySpending.Fold()
+        val paid = HashMap<String, Int>()
+        val share = HashMap<String, Int>()
+        fun accumulate(expenses: List<ExpenseListItem>) {
+            for (expense in expenses) {
+                if (expense.isReimbursement) continue
+                paid[expense.paidBy.id] = (paid[expense.paidBy.id] ?: 0) + expense.amount
+                ExpenseShares.shares(
+                    expense.id,
+                    expense.amount,
+                    expense.splitMode,
+                    expense.paidFor,
+                ).forEach { (id, amount) -> share[id] = (share[id] ?: 0) + amount }
+            }
+        }
         var cursor = 0
         try {
             for (page in 0 until CATEGORY_PAGE_LIMIT) {
@@ -806,9 +1033,14 @@ class GroupScreenModel(
                     SpliitApi.expenses(groupId, cursor = cursor, limit = CATEGORY_PAGE_SIZE),
                 )
                 fold.add(response.expenses)
+                accumulate(response.expenses)
                 cursor = response.nextCursor
                 if (!response.hasMore) break
             }
+            val queued = pendingExpenses.mapNotNull { it.toListItem(group) }
+            fold.add(queued)
+            accumulate(queued)
+            participantSums = ParticipantSums(paid, share)
             categorySpending = fold.breakdown
             didLoadCategorySpending = true
         } catch (error: CancellationException) {
@@ -823,7 +1055,8 @@ class GroupScreenModel(
             // being shown on its own.
             if (group != null && isOfflineNetworkFailure(error)) {
                 isOffline = true
-                categorySpending = CategorySpending.Fold().apply { add(expenses) }.breakdown
+                participantSums = null
+                categorySpending = CategorySpending.breakdownOf(displayExpenses)
                 didLoadCategorySpending = true
                 categorySpendingFailure = null
             } else {
@@ -907,6 +1140,8 @@ class GroupScreenModel(
             nextActivityCursor = response.nextCursor
             activitiesFailure = null
             didLoadActivities = true
+            // The snapshot is what the log is read from with no network, so it has to hold it.
+            persistSnapshot()
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -1300,6 +1535,23 @@ data class ExpenseSection(
 }
 
 /** One day of the activity log, newest first. */
+/** The running sums behind [GroupScreenModel.participantTotals]. */
+private data class ParticipantSums(
+    val paid: Map<String, Int>,
+    val share: Map<String, Int>,
+)
+
+/** What one person paid into the group, and what they carry of it. */
+data class ParticipantTotal(
+    val participant: Participant,
+    /** Where they sit in the group's list, which is what their colour comes from. */
+    val position: Int,
+    /** Minor units of the expenses they paid. */
+    val paid: Int,
+    /** Minor units of the expenses they were part of, as the balances tab charges them. */
+    val share: Int,
+)
+
 data class ActivitySection(
     val date: LocalDate,
     val activities: List<Activity>,

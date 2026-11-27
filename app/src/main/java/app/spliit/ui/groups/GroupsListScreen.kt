@@ -82,6 +82,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
 import app.spliit.R
@@ -749,6 +750,11 @@ private fun GroupsList(
             item(key = "starred") { SectionHeader("Starred") }
             itemsIndexed(starred, key = { _, group -> group.groupId }) { index, group ->
                 GroupRow(
+                    modifier = Modifier.animateItem(
+                        placementSpec = SpliitMotion.spatialDefault<IntOffset>(),
+                        fadeInSpec = SpliitMotion.effectsDefault(),
+                        fadeOutSpec = SpliitMotion.effectsFast(),
+                    ),
                     group = group,
                     summary = model.summaries[group.groupId],
                     first = index == 0,
@@ -765,6 +771,11 @@ private fun GroupsList(
             item(key = "recent") { SectionHeader("Recent groups") }
             itemsIndexed(recent, key = { _, group -> group.groupId }) { index, group ->
                 GroupRow(
+                    modifier = Modifier.animateItem(
+                        placementSpec = SpliitMotion.spatialDefault<IntOffset>(),
+                        fadeInSpec = SpliitMotion.effectsDefault(),
+                        fadeOutSpec = SpliitMotion.effectsFast(),
+                    ),
                     group = group,
                     summary = model.summaries[group.groupId],
                     first = index == 0,
@@ -781,6 +792,11 @@ private fun GroupsList(
             item(key = "archived") { SectionHeader("Archived") }
             itemsIndexed(archived, key = { _, group -> group.groupId }) { index, group ->
                 GroupRow(
+                    modifier = Modifier.animateItem(
+                        placementSpec = SpliitMotion.spatialDefault<IntOffset>(),
+                        fadeInSpec = SpliitMotion.effectsDefault(),
+                        fadeOutSpec = SpliitMotion.effectsFast(),
+                    ),
                     group = group,
                     summary = model.summaries[group.groupId],
                     first = index == 0,
@@ -827,6 +843,7 @@ private fun GroupRow(
     onStar: () -> Unit,
     onArchive: () -> Unit,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
@@ -841,7 +858,7 @@ private fun GroupRow(
     )
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             // Neighbours nearly touch; only the top of a section gets air above it.
@@ -874,6 +891,9 @@ private fun GroupRow(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        // Clipped to the card before it is made clickable, so the ripple is
+                        // the card's rather than a rectangle across the row.
+                        .clip(shape)
                         .combinedClickable(
                             interactionSource = interaction,
                             indication = LocalIndication.current,

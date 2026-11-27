@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
@@ -134,33 +135,7 @@ private fun ActivityList(
     sections: List<ActivitySection>,
     onEdit: (String) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
-    var refreshing by remember { mutableStateOf(false) }
-
-    val refreshState = rememberPullToRefreshState()
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            scope.launch {
-                refreshing = true
-                try {
-                    model.refreshActivities()
-                } finally {
-                    refreshing = false
-                }
-            }
-        },
-        state = refreshState,
-        indicator = {
-            PullToRefreshDefaults.Indicator(
-                state = refreshState,
-                isRefreshing = refreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        },
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        LazyColumn(
+    LazyColumn(
             modifier = Modifier.fillMaxSize(),
         ) {
             sections.forEach { section ->
@@ -198,7 +173,6 @@ private fun ActivityList(
                     LaunchedEffect(model.activities.size) { model.loadNextActivityPage() }
                 }
             }
-        }
     }
 }
 
@@ -224,7 +198,9 @@ private fun ActivityRow(
             .then(
                 if (opensExpense) {
                     Modifier
-                        // The row dips under the finger; no ripple over a card.
+                        // Clipped to the card before it is made clickable: the ripple belongs
+                        // to the card, not to the full-width slot it sits in.
+                        .clip(shape)
                         .clickable(
                             interactionSource = interaction,
                             indication = LocalIndication.current,

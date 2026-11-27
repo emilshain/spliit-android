@@ -1,6 +1,7 @@
 package app.spliit.domain
 
 import app.spliit.data.model.ExpenseListItem
+import kotlinx.serialization.Serializable
 
 /**
  * What a group spent, broken down by the category each expense was filed under.
@@ -12,6 +13,7 @@ import app.spliit.data.model.ExpenseListItem
  * This is deliberately the *same* fold as the web app's `getSpendingByCategory`, down to the
  * zero-total filter and the descending sort.
  */
+@Serializable
 data class CategorySpending(
     /**
      * The server's category ID. Zero stands for both the "General" category and an expense filed

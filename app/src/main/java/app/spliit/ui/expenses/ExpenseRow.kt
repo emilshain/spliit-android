@@ -1,6 +1,7 @@
 package app.spliit.ui.expenses
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
@@ -28,8 +30,9 @@ import app.spliit.domain.ExpenseBalance
 import app.spliit.domain.MoneyFormatter
 import app.spliit.ui.theme.CategoryIcons
 import app.spliit.ui.theme.LocalSpliitColors
+import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.Money
-import app.spliit.ui.theme.ParticipantDot
+import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
 import kotlin.math.abs
 
@@ -42,6 +45,9 @@ import kotlin.math.abs
  *
  * Shared by the expenses tab and by search results, so a matched expense reads exactly as it does
  * in the list it came from — same columns, same money treatment, same category glyph.
+ *
+ * When [onClick] is given the card itself is the button: the ripple is the card's own, clipped to
+ * its corners, rather than a full-width rectangle behind it.
  */
 @Composable
 fun ExpenseRow(
@@ -53,24 +59,20 @@ fun ExpenseRow(
     shape: Shape = RoundedCornerShape(16.dp),
     /** A change saved here that has not reached the server yet. */
     pending: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    /** Shared with the press animation, so the card dips while it is touched. */
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
     val balance = activeParticipantId?.let { ExpenseBalance.of(it, expense) }
     val reading = balance?.takeIf { it != 0 }?.let { ExpenseBalance.reading(it, expense) }
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            // Neighbours in a day nearly touch; the shared edge keeps the small corner.
-            .padding(horizontal = 16.dp, vertical = 2.dp),
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    val body: @Composable () -> Unit = {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CategoryGlyph(expense)
+            CategoryGlyph(expense, payerPosition)
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -85,12 +87,12 @@ fun ExpenseRow(
                 )
 
                 // The whole expense, and who put it in: the figure the group is splitting, as
-                // opposed to the reader's own part on the right.
+                // opposed to the reader's own part on the right. Their colour is already on the
+                // glyph to the left, so it is not repeated as a dot here.
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ParticipantDot(position = payerPosition, size = 7.dp)
                     Text(
                         text = "${expense.paidBy.name} paid ${formatter.string(expense.amount)}",
                         style = SpliitType.Secondary,
@@ -149,10 +151,44 @@ fun ExpenseRow(
             }
         }
     }
+
+    val container = modifier
+        .fillMaxWidth()
+        // Neighbours in a day nearly touch; the shared edge keeps the small corner.
+        .padding(horizontal = 16.dp, vertical = 2.dp)
+        .then(
+            if (onClick != null) Modifier.pressScale(interactionSource, pressedScale = 0.98f)
+            else Modifier,
+        )
+
+    if (onClick != null) {
+        Surface(
+            onClick = onClick,
+            modifier = container,
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            interactionSource = interactionSource,
+        ) {
+            body()
+        }
+    } else {
+        Surface(
+            modifier = container,
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            body()
+        }
+    }
 }
 
 @Composable
-private fun CategoryGlyph(expense: ExpenseListItem) {
+private fun CategoryGlyph(expense: ExpenseListItem, payerPosition: Int) {
+    // The tile is tinted with the colour of whoever paid: the row is about them, and the dot that
+    // used to say so beside the line is now this.
+    val tint = LocalSpliitColors.current.monogramFill(
+        MonogramPalette.indexAtPosition(payerPosition),
+    )
     Box(
         modifier = Modifier
             .size(42.dp)
@@ -166,7 +202,7 @@ private fun CategoryGlyph(expense: ExpenseListItem) {
             CategoryIcons.icon(expense.category),
             contentDescription = expense.category?.name,
             modifier = Modifier.size(21.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = tint,
         )
     }
 }

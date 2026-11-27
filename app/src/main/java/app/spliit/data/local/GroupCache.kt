@@ -4,10 +4,13 @@ import android.content.Context
 import app.spliit.data.model.Activity
 import app.spliit.data.model.Balance
 import app.spliit.data.model.ExpenseCategory
+import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.ExpenseListItem
+import app.spliit.data.model.GroupStatsResponse
 import app.spliit.data.model.Group
 import app.spliit.data.model.GroupSummary
 import app.spliit.data.model.Reimbursement
+import app.spliit.domain.CategorySpending
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -63,6 +66,18 @@ class GroupCache(context: Context) {
         }
     }
 
+    /**
+     * Remembers one expense's full detail, beside the snapshot.
+     *
+     * The list rows carry only what a row needs, so an expense opened with no network had
+     * nothing to be drawn from. A detail that has been read once is kept here — read back out of
+     * the snapshot rather than held in memory, so the file stays the one copy.
+     */
+    fun saveDetail(groupId: String, detail: ExpenseDetails) {
+        val snapshot = load(groupId) ?: return
+        save(snapshot.copy(details = snapshot.details + (detail.id to detail)))
+    }
+
     fun forget(groupId: String) {
         runCatching { fileFor(groupId).delete() }
     }
@@ -99,4 +114,10 @@ data class CachedGroup(
     val nextCursor: Int = 0,
     /** The log as last read, so the activity tab is not blank without a network. */
     val activities: List<Activity> = emptyList(),
+    /** Totals as last answered, so the totals tab opens with figures rather than a skeleton. */
+    val stats: GroupStatsResponse? = null,
+    /** The category breakdown as last folded. */
+    val categorySpending: List<CategorySpending> = emptyList(),
+    /** Expenses whose detail has been opened, so their pages open without a network too. */
+    val details: Map<String, ExpenseDetails> = emptyMap(),
 )

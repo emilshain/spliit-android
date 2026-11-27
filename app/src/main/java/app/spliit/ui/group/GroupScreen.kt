@@ -1,5 +1,6 @@
 package app.spliit.ui.group
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -65,6 +66,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -271,6 +275,20 @@ fun GroupScreen(
     }
 
     LaunchedEffect(model) { model.start() }
+
+    // Coming back into signal is the moment the backlog can go; it must not wait for the screen
+    // to be reopened. The first reading is already true when the screen opens, so only a change
+    // after it counts.
+    LaunchedEffect(model) {
+        var announced = false
+        container.connectivity.online.collect { online ->
+            if (!announced) {
+                announced = true
+                return@collect
+            }
+            if (online) model.retryWhenBackOnline()
+        }
+    }
     // A delete the user has already asked for must not be lost to leaving the screen.
     DisposableEffect(model) { onDispose { model.flushPendingDeletion() } }
     // Restarting on every keystroke cancels the run before it, which is what makes the wait
@@ -279,6 +297,14 @@ fun GroupScreen(
     // The search icon belongs to the expenses page; any other tab takes it away.
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != 0) searchCollapsed = false
+    }
+
+    // Back leaves the page this screen opened, not the group: search, an expense and the group's
+    // settings are all pages of this screen, and closing the group from one of them loses the
+    // place the person was working in.
+    BackHandler(enabled = destination != GroupDestination.TABS) {
+        query = ""
+        destination = GroupDestination.TABS
     }
 
     val recentGroups by container.recentGroups.groups.collectAsState(initial = emptyList())
@@ -585,9 +611,17 @@ fun GroupScreen(
                         AnimatedContent(
                             targetState = destination,
                             transitionSpec = {
-                                // The outgoing page stays put and opaque; only the arriving one
-                                // fades up over it, so the swap never reveals the window.
-                                fadeIn(SpliitMotion.effectsDefault()) togetherWith ExitTransition.None
+                                // Opening search crossfades under the field that grew into it.
+                                // Closing it fades both ways on the fast spring: the search
+                                // page's backdrop used to hang over the list until the incoming
+                                // page had finished arriving.
+                                if (targetState == GroupDestination.SEARCH) {
+                                    fadeIn(SpliitMotion.effectsDefault()) togetherWith
+                                        ExitTransition.None
+                                } else {
+                                    fadeIn(SpliitMotion.effectsFast()) togetherWith
+                                        fadeOut(SpliitMotion.effectsFast())
+                                }
                             },
                             label = "group destination",
                         ) { target ->
@@ -612,7 +646,23 @@ fun GroupScreen(
                                     fieldMorph = morph,
                                 )
                             } else {
-                            Box(modifier = Modifier.fillMaxSize()) {
+                            // A pull anywhere on the group reloads it: the four pages are one
+                            // subject, and a gesture that only worked on the first of them (and
+                            // not on an empty list) read as broken.
+                            val refreshState = rememberPullToRefreshState()
+                            PullToRefreshBox(
+                                isRefreshing = model.isRefreshing,
+                                onRefresh = { model.refresh() },
+                                state = refreshState,
+                                indicator = {
+                                    PullToRefreshDefaults.Indicator(
+                                        state = refreshState,
+                                        isRefreshing = model.isRefreshing,
+                                        modifier = Modifier.align(Alignment.TopCenter),
+                                    )
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
                                 // The pages themselves are the gesture: a swipe moves one page
                                 // across, and the pill in the header answers before they settle.
                                 HorizontalPager(

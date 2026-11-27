@@ -45,10 +45,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Participant
 import app.spliit.domain.CategorySpending
+import app.spliit.domain.MoneyFormatter
+import app.spliit.ui.group.ParticipantTotal
 import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.CategoryIcons
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.Monogram
+import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
 import app.spliit.ui.theme.SkeletonCard
@@ -143,36 +147,10 @@ private fun TotalsContent(
     onIdentify: () -> Unit,
 ) {
     val stats = model.stats ?: return
-    val scope = rememberCoroutineScope()
-    var refreshing by remember { mutableStateOf(false) }
 
-    val refreshState = rememberPullToRefreshState()
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            scope.launch {
-                refreshing = true
-                try {
-                    model.refreshStats(identity?.id)
-                    model.refreshCategorySpending()
-                } finally {
-                    refreshing = false
-                }
-            }
-        },
-        state = refreshState,
-        indicator = {
-            PullToRefreshDefaults.Indicator(
-                state = refreshState,
-                isRefreshing = refreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        },
+    LazyColumn(
         modifier = Modifier.fillMaxSize(),
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-        ) {
             item(key = "group") {
                 SectionHeader("The group")
                 TotalsCard(shape = RoundedCornerShape(CardCorner)) {
@@ -215,6 +193,31 @@ private fun TotalsContent(
                             )
                         }
                         IdentityRow(identity, identityIsNobody, onIdentify)
+                    }
+                }
+            }
+
+            // Who paid what: the same fold the web app's totals page shows, one row a person,
+            // the bar measured against the group's own total so the rows compare down the page.
+            val people = model.participantTotals
+            if (people.isNotEmpty()) {
+                item(key = "participants-header") { SectionHeader("By participant") }
+                itemsIndexed(
+                    items = people,
+                    key = { _, total -> "participant-${total.participant.id}" },
+                ) { index, total ->
+                    val shape = RoundedCornerShape(
+                        topStart = if (index == 0) CardCorner else AdjacentCorner,
+                        topEnd = if (index == 0) CardCorner else AdjacentCorner,
+                        bottomStart = if (index == people.lastIndex) CardCorner else AdjacentCorner,
+                        bottomEnd = if (index == people.lastIndex) CardCorner else AdjacentCorner,
+                    )
+                    TotalsCard(shape = shape) {
+                        ParticipantRow(
+                            total = total,
+                            groupTotal = stats.totalGroupSpendings,
+                            formatter = model.moneyFormatter,
+                        )
                     }
                 }
             }
@@ -275,7 +278,6 @@ private fun TotalsContent(
             }
 
             item(key = "bottom") { Spacer(Modifier.height(24.dp)) }
-        }
     }
 }
 
@@ -345,6 +347,53 @@ private fun IdentityRow(identity: Participant?, identityIsNobody: Boolean, onIde
                     identityIsNobody -> "Nobody"
                     else -> "Say who you are"
                 },
+            )
+        }
+    }
+}
+
+/**
+ * One person's row: what they paid, and what they carry of the group's spending.
+ *
+ * The amount on the right is what they put in; the line below is their share of what was spent,
+ * which is the other half of the same fact and the number the balances tab charges them. Their
+ * colour comes from where they sit in the group, the same colour the monogram has everywhere.
+ */
+@Composable
+private fun ParticipantRow(
+    total: ParticipantTotal,
+    groupTotal: Int,
+    formatter: MoneyFormatter,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Monogram(
+            name = total.participant.name,
+            colorIndex = MonogramPalette.indexAtPosition(total.position),
+            size = 34.dp,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = total.participant.name,
+                    style = SpliitType.RowTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(text = formatter.string(abs(total.paid)), style = SpliitType.RowTitle)
+            }
+            groupSlice(total.paid, groupTotal)?.let { SliceBar(it.toFloat()) }
+            Text(
+                text = "Share ${formatter.string(abs(total.share))}",
+                style = SpliitType.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

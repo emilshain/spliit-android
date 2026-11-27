@@ -132,26 +132,10 @@ fun ExpenseListTab(
                 }
                 LaunchedEffect(searchCollapsed) { onSearchCollapsed(searchCollapsed) }
 
-                val refreshState = rememberPullToRefreshState()
-                PullToRefreshBox(
-                    // A pull reloads the first page and everything that counts it; paging is the
-                    // footer's job and must not be what the spinner reports.
-                    isRefreshing = model.isRefreshing,
-                    onRefresh = { model.refresh() },
-                    state = refreshState,
-                    indicator = {
-                        PullToRefreshDefaults.Indicator(
-                            state = refreshState,
-                            isRefreshing = model.isRefreshing,
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
-                    },
+                LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-        ) {
                         item(key = "summary") { BalanceSummaryCard(model = model) }
 
                         item(key = "search") {
@@ -231,20 +215,14 @@ fun ExpenseListTab(
                                     bottomStart = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
                                     bottomEnd = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
                                 )
-                                val interaction = remember { MutableInteractionSource() }
+                                // The ripple belongs to the card, not to the row's full width:
+                                // the tap is passed into the card, so it is clipped to its own
+                                // shape and does not run from edge to edge.
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .animateItem()
-                                        // No ripple over a card: the card itself dips, the way a
-                                        // SwiftUI button does when it is touched.
-                                        .clickable(
-                                            interactionSource = interaction,
-                                            indication = LocalIndication.current,
-                                        ) { onEdit(expense.id) }
-                                        .pressScale(interaction, pressedScale = 0.98f),
+                                    modifier = Modifier.fillMaxWidth().animateItem(),
                                 ) {
                                     ExpenseRow(
+                                        onClick = { onEdit(expense.id) },
                                         expense = expense,
                                         payerPosition = model.participantPosition(expense.paidBy.id),
                                         formatter = model.moneyFormatter,
@@ -271,7 +249,6 @@ fun ExpenseListTab(
 
                         item(key = "bottom") { Spacer(Modifier.padding(bottom = 88.dp)) }
                     }
-                }
             }
         }
 

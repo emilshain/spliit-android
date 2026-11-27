@@ -76,6 +76,9 @@ fun ExpressiveSwipe(
     var offset by remember { mutableFloatStateOf(0f) }
     var width by remember { mutableFloatStateOf(0f) }
     var shrink by remember { mutableFloatStateOf(0f) }
+    // How much of the action panel is still there. A delete closes it to nothing; a toggle
+    // leaves it at its width and springs the row back.
+    var panelOpen by remember { mutableFloatStateOf(1f) }
     // True from the moment a gesture is decided until the row has finished moving: drags and a
     // second gesture are ignored meanwhile, so nothing can race the animation.
     var settling by remember { mutableStateOf(false) }
@@ -98,10 +101,10 @@ fun ExpressiveSwipe(
         val leadingReveal = offset.coerceAtLeast(0f)
 
         if (endToStart != null && trailingReveal > 0f) {
-            ActionPanel(endToStart, trailingReveal, Alignment.CenterEnd)
+            ActionPanel(endToStart, trailingReveal * panelOpen, Alignment.CenterEnd)
         }
         if (startToEnd != null && leadingReveal > 0f) {
-            ActionPanel(startToEnd, leadingReveal, Alignment.CenterStart)
+            ActionPanel(startToEnd, leadingReveal * panelOpen, Alignment.CenterStart)
         }
 
         Box(
@@ -132,7 +135,19 @@ fun ExpressiveSwipe(
                                 val (chosen, direction) = action as Pair<SwipeAction, Int>
                                 glideTo(direction * width, SpliitMotion.spatialFast())
                                 if (chosen.collapses) {
-                                    animate(initialValue = 0f, targetValue = 1f) { value, _ -> shrink = value }
+                                    // The row has gone off the edge; what is left on screen is
+                                    // the panel, and it closes to nothing rather than waiting
+                                    // there for the list to drop the row.
+                                    animate(
+                                        initialValue = 1f,
+                                        targetValue = 0f,
+                                        animationSpec = SpliitMotion.spatialDefault(),
+                                    ) { value, _ -> panelOpen = value }
+                                    animate(
+                                        initialValue = 0f,
+                                        targetValue = 1f,
+                                        animationSpec = SpliitMotion.spatialFast(),
+                                    ) { value, _ -> shrink = value }
                                     chosen.onAction()
                                 } else {
                                     chosen.onAction()

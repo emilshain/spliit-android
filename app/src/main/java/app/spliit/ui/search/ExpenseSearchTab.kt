@@ -285,19 +285,12 @@ private fun Results(
                         SpliitDimens.AdjacentCorner
                     },
                 )
-                val interaction = remember { MutableInteractionSource() }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateItem()
-                        .clickable(
-                            interactionSource = interaction,
-                            indication = LocalIndication.current,
-                        ) { onEdit(expense.id) }
-                        .pressScale(interaction, pressedScale = 0.98f),
-                ) {
+                // The card is the button: its own ripple, clipped to its own corners, rather
+                // than a full-width rectangle behind it.
+                Box(modifier = Modifier.fillMaxWidth().animateItem()) {
                     Column {
                         ExpenseRow(
+                            onClick = { onEdit(expense.id) },
                             expense = expense,
                             payerPosition = model.participantPosition(expense.paidBy.id),
                             formatter = model.moneyFormatter,

@@ -143,6 +143,23 @@ A group's dates and participant counts are cached with the snapshots (`GroupCach
 and the category breakdown are folded from the cached expenses, search matches titles locally,
 and the activity log comes out of the snapshot.
 
+Offline covers more than the first page now. An expense whose detail has been opened keeps that
+detail in the snapshot (`CachedGroup.details`), so its page and the edit form open with no network;
+a queued create is drawn from the outbox as if it had been read back. The activity log is written
+into the snapshot as soon as it is read, and the totals (`stats`, `categorySpending`) are stored
+with it, so the totals tab opens on figures rather than a skeleton. None of this caches receipt
+images: a receipt is a URL, and the image cache belongs to Coil.
+
+A queued change is visible the moment it is saved: `reloadAfterExpenseChangeNow` refreshes the
+outbox before it asks the network, and `AppContainer.connectivity` (a `ConnectivityMonitor`) makes
+the screen reload and flush the backlog when a network comes back. The totals count queued creates
+(`withPendingStats`, and the category sweep folds them in), because a saved expense is spending
+whether or not the server has seen it.
+
+One pull gesture belongs to the group page, not to a tab: `PullToRefreshBox` wraps the pager in
+`GroupScreen`, and the individual tabs must not add their own or they will consume the gesture
+first. A pull has to work on every tab, including one whose list is empty.
+
 A refresh nobody asked for is silent. The home list fetches its details again every time it is
 opened, and a group page re-reads on entry — both keep what is already on screen (the local list,
 the `GroupCache` snapshot) and swap in the server's answer when it arrives. `PullToRefreshBox`'s
@@ -209,7 +226,10 @@ local read that takes milliseconds.
 ## Touch feedback
 
 Every clickable row, card, pill and button shows a ripple, and the cards additionally dip with
-`Modifier.pressScale`. Do not write `indication = null` on a `clickable`/`combinedClickable`;
+`Modifier.pressScale`. A ripple belongs to the thing it is drawn on: a card is made clickable
+itself (`Surface(onClick = …)`, or `Modifier.clip(shape).clickable(…)` before the handler) so the
+ripple is clipped to its corners. Never wrap a card in a full-width `Box { clickable }` — that
+draws a rectangle from one edge of the screen to the other. Do not write `indication = null` on a `clickable`/`combinedClickable`;
 pass `LocalIndication.current` when a custom `interactionSource` is needed for the scale, or let
 `clickable` use the default. Material components (`Surface(onClick = …)`, `Button`, `IconButton`)
 already ripple — do not re-implement them.
