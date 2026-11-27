@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Reading whether a network is up; without it ConnectivityManager throws, not asks. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Receipts are taken with the phone's camera app; the chooser has to see it. -->
     <queries>

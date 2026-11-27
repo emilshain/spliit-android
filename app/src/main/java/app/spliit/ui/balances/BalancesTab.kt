@@ -395,7 +395,9 @@ private fun BalanceRow(
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Top,
+        // Centred rather than top-aligned: the name and the bar make the row taller than the
+        // monogram, and an avatar pinned to the top leaves a strip of empty card underneath it.
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Monogram(name = participant.name, colorIndex = position, size = 26.dp)
 

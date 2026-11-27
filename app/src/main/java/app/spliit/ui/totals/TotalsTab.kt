@@ -5,9 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -406,14 +408,17 @@ private fun CategoryRow(
     groupTotal: Int,
     formatter: app.spliit.domain.MoneyFormatter,
 ) {
+    // The tile runs the height of the row - the title and the bar beside it - instead of
+    // sitting at the top of a 26dp square with empty card underneath it.
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(26.dp)
+                .fillMaxHeight()
+                .width(26.dp)
                 .background(
                     MaterialTheme.colorScheme.surfaceContainerHighest,
                     RoundedCornerShape(8.dp),
