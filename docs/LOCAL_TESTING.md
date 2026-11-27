@@ -46,11 +46,17 @@ tests already use instead of creating throwaway groups on `spliit.app`:
 node tools/fake-spliit/server.mjs      # http://0.0.0.0:8790, Node 18+
 ```
 
-`tools/fake-spliit/server.mjs` serves `app/src/test/resources/fixtures/*.json` verbatim as tRPC
-envelopes for `groups.get`, `groups.list`, `groups.expenses.list` (honouring the search `filter`),
+`tools/fake-spliit/server.mjs` serves `app/src/test/resources/fixtures/*.json` as tRPC envelopes
+for `groups.get`, `groups.list`, `groups.expenses.get` / `.list` (honouring the search `filter`),
 `groups.balances.list`, `groups.stats.overview` / `groups.stats.get`, `groups.activities.list` and
-`categories.list`. Anything else answers `404 NOT_FOUND`, the way an instance that predates a
-procedure does. The fixture set is the "Weekend in Lisbon" group with three participants.
+`categories.list`. It also accepts `groups.expenses.create`, `.update` and `.delete`, keeping the
+changes in memory so a written expense reads back. Anything else answers `404 NOT_FOUND`, the way an
+instance that predates a procedure does. The fixture set is the "Weekend in Lisbon" group with
+three participants.
+
+It also speaks the document upload handshake, so a receipt photo can be attached and seen without
+an S3 bucket: `POST /api/s3-upload` answers a presigned policy, `POST /uploads` takes the multipart
+file and keeps its bytes in memory, and `GET /uploads/<key>` serves them back to Coil.
 
 Two things that cost time the first run:
 
@@ -95,6 +101,19 @@ adb -s emulator-5554 exec-out screencap -p > shot.png
 The tab bar sits at the top of the group screen; the four tabs are Expenses, Balances, Totals and
 Information, and search is the magnifier to the left of the add button. The activity log is opened
 from the Activity card in the Information tab.
+
+Two things `input` cannot drive on this image:
+
+- **DocumentsUI's content grid** (the file picker behind "Add photo → Files") takes no synthetic
+  taps — not `input tap`, not `input swipe`, not separate `input motionevent DOWN`/`UP`, not a long
+  press, not keyboard focus and `ENTER`. Its toolbar and overflow menu do respond, which is how you
+  can tell input reaches the window at all. Anything that ends in picking a file from storage has
+  to be done by hand here.
+- **The camera app's save step** works, but on a fresh boot it sometimes writes a 0-byte file to the
+  URI it was given, which the app correctly reports as unreadable. `adb shell pm clear
+  com.android.camera2` and one more capture clears it up. The proof that a capture worked is in
+  `run-as app.spliit ls -l cache/receipts` (a JPEG of tens of KB rather than 0) and in the fake
+  server's log (`POST /api/s3-upload`, then `POST /uploads`).
 
 ## 5. Screens that were checked this way
 
