@@ -48,11 +48,12 @@ object ReceiptPhotos {
         val resolver = context.contentResolver
 
         // `decodeStream` answers null by design when it is only asked for bounds, so the stream is
-        // read for its size rather than for a result: trusting the return value rejected every photo.
+        // checked for on its own and the decode result is ignored: a `?:` after the `use` above
+        // would test the decode, not the stream, and reject every photo.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { stream ->
-            BitmapFactory.decodeStream(stream, null, bounds)
-        } ?: throw IllegalArgumentException("That file couldn’t be opened.")
+        val sizing = resolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("That file couldn’t be opened.")
+        sizing.use { stream -> BitmapFactory.decodeStream(stream, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
             throw IllegalArgumentException("That photo couldn’t be read.")
         }
@@ -60,7 +61,9 @@ object ReceiptPhotos {
         var sample = 1
         while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MaxEdge) sample *= 2
 
-        val decoded = resolver.openInputStream(uri)?.use { stream ->
+        val pixels = resolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("That file couldn’t be opened.")
+        val decoded = pixels.use { stream ->
             BitmapFactory.decodeStream(
                 stream,
                 null,

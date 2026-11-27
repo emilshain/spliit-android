@@ -137,10 +137,19 @@ fun ExpenseFormSheet(
         scope.launch {
             try {
                 val photo = withContext(Dispatchers.IO) {
-                    candidates.firstNotNullOfOrNull { candidate ->
-                        runCatching { ReceiptPhotos.read(context, candidate) }.getOrNull()
+                    var refused: Exception? = null
+                    val found = candidates.firstNotNullOfOrNull { candidate ->
+                        try {
+                            ReceiptPhotos.read(context, candidate)
+                        } catch (error: Exception) {
+                            // Kept rather than dropped: a photo that cannot be read is worth a
+                            // reason, and "couldn't be opened" is not one when it could.
+                            refused = error
+                            null
+                        }
                     }
-                } ?: throw IllegalArgumentException("That photo couldn’t be opened.")
+                    found ?: throw refused ?: IllegalArgumentException("That photo couldn’t be opened.")
+                }
                 val document = client.uploadDocument(
                     bytes = photo.bytes,
                     mimeType = photo.mimeType,
