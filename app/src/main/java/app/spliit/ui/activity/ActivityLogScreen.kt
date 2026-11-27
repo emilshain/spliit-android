@@ -194,7 +194,7 @@ private fun ActivityRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .padding(horizontal = SpliitDimens.ScreenGutter, vertical = SpliitDimens.CardGap)
             .then(
                 if (opensExpense) {
                     Modifier
@@ -215,7 +215,10 @@ private fun ActivityRow(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(
+                horizontal = SpliitDimens.RowPaddingHorizontal,
+                vertical = SpliitDimens.RowPaddingVertical,
+            ),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top,
         ) {
@@ -248,10 +251,10 @@ private fun ActivityRow(
 
 /** A row's own corners, and the smaller ones it shares with the row above or below it. */
 private fun activityShape(first: Boolean, last: Boolean): RoundedCornerShape = RoundedCornerShape(
-    topStart = if (first) 16.dp else 6.dp,
-    topEnd = if (first) 16.dp else 6.dp,
-    bottomStart = if (last) 16.dp else 6.dp,
-    bottomEnd = if (last) 16.dp else 6.dp,
+    topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+    topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+    bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+    bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
 )
 
 /** The same glyphs the app uses for these actions elsewhere. */

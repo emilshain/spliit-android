@@ -70,10 +70,14 @@ for (let i = 1; i <= EXTRA_EXPENSES; i++) {
 }
 
 const groupParticipants = JSON.parse(fixtures["groups.get"]).result.data.json.group.participants;
+
+/** Receipt photos this stand-in has been handed, so their thumbnails can be served back. */
+const uploads = new Map();
+let uploadCount = 0;
 const categoryList = JSON.parse(fixtures["categories.list"]).result.data.json.categories;
 
 /** The request body, as the client sent it: a plain JSON tRPC envelope. */
-function parseBody(body) {
+function parseBody(text) {
   try {
     const parsed = JSON.parse(body || "{}");
     // The client sends its input inside a superjson envelope.
@@ -108,7 +112,8 @@ function expenseFromValues(id, values, previous = null) {
       participant: participant(share.participant.id ?? share.participant),
       shares: share.shares,
     })),
-    _count: { documents: 0 },
+    documents: values.documents ?? previous?.documents ?? [],
+    _count: { documents: (values.documents ?? previous?.documents ?? []).length },
   };
 }
 
@@ -201,12 +206,15 @@ function stats(raw) {
 const port = Number(process.env.PORT || 8790);
 
 const server = createServer((request, response) => {
-  let body = "";
-  request.on("data", (chunk) => (body += chunk));
+  // Buffers, not a string: a receipt photo is binary, and decoding it as UTF-8 corrupts it.
+  const chunks = [];
+  request.on("data", (chunk) => chunks.push(chunk));
   request.on("end", () => {
+    const body = Buffer.concat(chunks);
+    const text = body.toString("utf8");
     const url = new URL(request.url, `http://${request.headers.host}`);
     const path = url.pathname.replace(/^\/api\/trpc\//, "");
-    const input = `${url.search}\n${body}`;
+    const input = `${url.search}\n${text}`;
     console.log(`${request.method} ${path}`);
 
     const send = (payload, status = 200) => {
@@ -218,6 +226,67 @@ const server = createServer((request, response) => {
       response.end(text);
     };
 
+    // The receipt flow: the app asks for an upload policy, posts the photo to the URL it names,
+    // then reads the document back from `<url>/<key>`. Nothing is signed here — the bytes are kept
+    // in memory so the thumbnail the app draws is really the photograph it just sent.
+    if (url.pathname === "/api/s3-upload") {
+      const key = `receipt-${++uploadCount}.jpg`;
+      send(JSON.stringify({ url: `http://${request.headers.host}/uploads`, fields: { key } }));
+      return;
+    }
+
+    if (url.pathname === "/uploads" && request.method === "POST") {
+      const boundaryMatch = /boundary=([^;]+)/.exec(request.headers["content-type"] || "");
+      const boundary = `--${(boundaryMatch?.[1] || "").trim().replace(/^"|"$/g, "")}`;
+      let key = null;
+      let photo = null;
+      let type = "image/jpeg";
+      let at = body.indexOf(boundary);
+      while (at !== -1) {
+        const next = body.indexOf(boundary, at + boundary.length);
+        const part = body.subarray(at + boundary.length, next === -1 ? body.length : next);
+        const headerEnd = part.indexOf("\r\n\r\n");
+        if (headerEnd !== -1) {
+          const header = part.subarray(0, headerEnd).toString("utf8");
+          if (/name="key"/.test(header)) {
+            key = part.subarray(headerEnd + 4).toString("utf8").trim();
+          }
+          if (/name="file"/.test(header)) {
+            const declared = /content-type:\s*([^\r]+)/i.exec(header);
+            if (declared) type = declared[1].trim();
+            photo = part.subarray(headerEnd + 4, part.length - 2);
+          }
+        }
+        at = next;
+      }
+      if (!key || !photo) {
+        console.log("  -> upload refused (no key or no file)");
+        response.writeHead(400);
+        response.end("bad upload");
+        return;
+      }
+      uploads.set(key, { bytes: photo, type });
+      console.log(`  -> stored ${key} (${photo.length} bytes)`);
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
+    if (url.pathname.startsWith("/uploads/")) {
+      const stored = uploads.get(url.pathname.slice("/uploads/".length));
+      if (!stored) {
+        response.writeHead(404);
+        response.end("not found");
+        return;
+      }
+      response.writeHead(200, {
+        "content-type": stored.type,
+        "content-length": stored.bytes.length,
+      });
+      response.end(stored.bytes);
+      return;
+    }
+
     switch (path) {
       case "groups.expenses.list":
         send(expensesPage(input));
@@ -227,7 +296,7 @@ const server = createServer((request, response) => {
         send(stats(input));
         return;
       case "groups.expenses.create": {
-        const input = parseBody(body);
+        const input = parseBody(text);
         const values = input.expenseFormValues || {};
         const id = input.expenseId || `fake${Date.now()}`;
         const expense = expenseFromValues(id, values);
@@ -237,7 +306,7 @@ const server = createServer((request, response) => {
         return;
       }
       case "groups.expenses.update": {
-        const input = parseBody(body);
+        const input = parseBody(text);
         const id = input.expenseId || stringField(input, "expenseId");
         const at = expenses.findIndex((expense) => expense.id === id);
         if (at === -1) {

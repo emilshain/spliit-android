@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.ExpenseDocument
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.theme.pressScale
@@ -109,7 +110,7 @@ fun ReceiptAttachments(
 @Composable
 private fun ReceiptThumbnail(document: ExpenseDocument, onRemove: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(SpliitDimens.TileCorner)
 
     Box(modifier = Modifier.size(84.dp)) {
         Surface(

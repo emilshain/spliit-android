@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.SpliitElevation
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 
@@ -56,7 +57,7 @@ fun ExpenseUndoBar(
         val shown = lastShown ?: return@AnimatedVisibility
         Surface(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(SpliitDimens.CardCorner),
             color = MaterialTheme.colorScheme.inverseSurface,
             tonalElevation = 0.dp,
             shadowElevation = SpliitElevation.Bar,

@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import kotlinx.coroutines.delay
 
@@ -83,7 +84,7 @@ fun GroupShareSheet(
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(SpliitDimens.TileCorner),
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
             ) {
                 SelectionContainer {

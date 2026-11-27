@@ -33,6 +33,7 @@ import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import kotlin.math.abs
 
@@ -56,7 +57,7 @@ fun ExpenseRow(
     formatter: MoneyFormatter,
     activeParticipantId: String?,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = RoundedCornerShape(SpliitDimens.CardCorner),
     /** A change saved here that has not reached the server yet. */
     pending: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -68,7 +69,10 @@ fun ExpenseRow(
 
     val body: @Composable () -> Unit = {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(
+                horizontal = SpliitDimens.RowPaddingHorizontal,
+                vertical = SpliitDimens.RowPaddingVertical,
+            ),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -155,7 +159,7 @@ fun ExpenseRow(
     val container = modifier
         .fillMaxWidth()
         // Neighbours in a day nearly touch; the shared edge keeps the small corner.
-        .padding(horizontal = 16.dp, vertical = 2.dp)
+        .padding(horizontal = SpliitDimens.ScreenGutter, vertical = SpliitDimens.CardGap)
         .then(
             if (onClick != null) Modifier.pressScale(interactionSource, pressedScale = 0.98f)
             else Modifier,
@@ -195,7 +199,7 @@ private fun CategoryGlyph(expense: ExpenseListItem, payerPosition: Int) {
             .size(42.dp)
             .background(
                 MaterialTheme.colorScheme.surfaceContainerHighest,
-                RoundedCornerShape(13.dp),
+                RoundedCornerShape(SpliitDimens.TileCorner),
             ),
         contentAlignment = Alignment.Center,
     ) {

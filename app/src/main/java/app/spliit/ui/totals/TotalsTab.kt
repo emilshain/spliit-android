@@ -155,7 +155,7 @@ private fun TotalsContent(
     ) {
             item(key = "group") {
                 SectionHeader("The group")
-                TotalsCard(shape = RoundedCornerShape(CardCorner)) {
+                TotalsCard(shape = RoundedCornerShape(SpliitDimens.CardCorner)) {
                     TotalFigure(
                         label = if (stats.totalGroupSpendings < 0) {
                             "Total group earnings"
@@ -174,7 +174,7 @@ private fun TotalsContent(
                 val spendings = stats.totalParticipantSpendings
                 val share = stats.totalParticipantShare?.takeIf { it.isFinite() }?.roundToInt()
 
-                TotalsCard(shape = RoundedCornerShape(CardCorner)) {
+                TotalsCard(shape = RoundedCornerShape(SpliitDimens.CardCorner)) {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (identity != null && spendings != null) {
                             TotalFigure(
@@ -209,10 +209,10 @@ private fun TotalsContent(
                     key = { _, total -> "participant-${total.participant.id}" },
                 ) { index, total ->
                     val shape = RoundedCornerShape(
-                        topStart = if (index == 0) CardCorner else AdjacentCorner,
-                        topEnd = if (index == 0) CardCorner else AdjacentCorner,
-                        bottomStart = if (index == people.lastIndex) CardCorner else AdjacentCorner,
-                        bottomEnd = if (index == people.lastIndex) CardCorner else AdjacentCorner,
+                        topStart = if (index == 0) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                        topEnd = if (index == 0) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                        bottomStart = if (index == people.lastIndex) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                        bottomEnd = if (index == people.lastIndex) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
                     )
                     TotalsCard(shape = shape) {
                         ParticipantRow(
@@ -233,17 +233,17 @@ private fun TotalsContent(
                     key = { _, spending -> "category-${spending.categoryId}" },
                 ) { index, spending ->
                     val shape = RoundedCornerShape(
-                        topStart = if (index == 0) CardCorner else AdjacentCorner,
-                        topEnd = if (index == 0) CardCorner else AdjacentCorner,
+                        topStart = if (index == 0) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                        topEnd = if (index == 0) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
                         bottomStart = if (index == model.categorySpending.lastIndex) {
-                            CardCorner
+                            SpliitDimens.CardCorner
                         } else {
-                            AdjacentCorner
+                            SpliitDimens.AdjacentCorner
                         },
                         bottomEnd = if (index == model.categorySpending.lastIndex) {
-                            CardCorner
+                            SpliitDimens.CardCorner
                         } else {
-                            AdjacentCorner
+                            SpliitDimens.AdjacentCorner
                         },
                     )
                     TotalsCard(shape = shape) {
@@ -294,12 +294,10 @@ private fun TotalsCard(shape: Shape, content: @Composable () -> Unit) {
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Box(modifier = Modifier.padding(18.dp)) { content() }
+        Box(modifier = Modifier.padding(SpliitDimens.CardPadding)) { content() }
     }
 }
 
-private val CardCorner = 22.dp
-private val AdjacentCorner = 10.dp
 
 @Composable
 private fun TotalFigure(
@@ -526,8 +524,8 @@ private fun TotalsSkeleton() {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SkeletonSection()
-        SkeletonCard(height = 118.dp, shape = RoundedCornerShape(24.dp))
+        SkeletonCard(height = 118.dp, shape = RoundedCornerShape(SpliitDimens.CardCorner))
         SkeletonSection(modifier = Modifier.padding(top = 10.dp))
-        SkeletonCard(height = 150.dp, shape = RoundedCornerShape(24.dp))
+        SkeletonCard(height = 150.dp, shape = RoundedCornerShape(SpliitDimens.CardCorner))
     }
 }

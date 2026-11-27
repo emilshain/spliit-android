@@ -108,7 +108,7 @@ private fun Artwork(art: EmptyStateArt) {
                 .size(64.dp)
                 .background(
                     LocalSpliitColors.current.brandAccentSoft,
-                    RoundedCornerShape(16.dp),
+                    RoundedCornerShape(SpliitDimens.TileCorner),
                 ),
             contentAlignment = Alignment.Center,
         ) {

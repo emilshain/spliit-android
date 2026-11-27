@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Participant
 import app.spliit.ui.group.ExpenseSection
@@ -62,6 +63,7 @@ import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SpliitDimens
+import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
 import java.util.Locale
 import kotlin.math.abs
@@ -155,10 +157,10 @@ fun ExpenseListTab(
                                     style = SpliitType.Secondary,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(
-                                        start = 20.dp,
-                                        end = 20.dp,
-                                        top = 4.dp,
-                                        bottom = 2.dp,
+                                        start = SpliitDimens.SectionLabelStart,
+                                        end = SpliitDimens.SectionLabelStart,
+                                        top = SpliitDimens.SectionLabelBottom,
+                                        bottom = SpliitDimens.CardGap,
                                     ),
                                 )
                             }
@@ -210,16 +212,43 @@ fun ExpenseListTab(
                                 // Opening is the whole gesture here: deleting lives on the
                                 // expense itself, so the row is free to belong to the pager.
                                 val shape = RoundedCornerShape(
-                                    topStart = if (index == 0) 16.dp else 6.dp,
-                                    topEnd = if (index == 0) 16.dp else 6.dp,
-                                    bottomStart = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
-                                    bottomEnd = if (index == section.expenses.lastIndex) 16.dp else 6.dp,
+                                    topStart = if (index == 0) {
+                                        SpliitDimens.CardCorner
+                                    } else {
+                                        SpliitDimens.AdjacentCorner
+                                    },
+                                    topEnd = if (index == 0) {
+                                        SpliitDimens.CardCorner
+                                    } else {
+                                        SpliitDimens.AdjacentCorner
+                                    },
+                                    bottomStart = if (index == section.expenses.lastIndex) {
+                                        SpliitDimens.CardCorner
+                                    } else {
+                                        SpliitDimens.AdjacentCorner
+                                    },
+                                    bottomEnd = if (index == section.expenses.lastIndex) {
+                                        SpliitDimens.CardCorner
+                                    } else {
+                                        SpliitDimens.AdjacentCorner
+                                    },
                                 )
                                 // The ripple belongs to the card, not to the row's full width:
                                 // the tap is passed into the card, so it is clipped to its own
                                 // shape and does not run from edge to edge.
+                                // A card that arrives or leaves settles on the fast spatial
+                                // spring. The list's default one is the search page's: slower
+                                // on purpose, because results stream in there and a card that
+                                // lands instantly over a half-typed word reads as a jump. Here
+                                // the rows are already known, so the wait is just lag.
                                 Box(
-                                    modifier = Modifier.fillMaxWidth().animateItem(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateItem(
+                                            placementSpec = SpliitMotion.spatialFast<IntOffset>(),
+                                            fadeInSpec = SpliitMotion.effectsDefault(),
+                                            fadeOutSpec = SpliitMotion.effectsFast(),
+                                        ),
                                 ) {
                                     ExpenseRow(
                                         onClick = { onEdit(expense.id) },
@@ -261,7 +290,7 @@ fun ExpenseListTab(
                 .padding(end = 20.dp, bottom = 24.dp)
                 .pressScale(addInteraction),
             interactionSource = addInteraction,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(SpliitDimens.FabCorner),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ) {
@@ -416,12 +445,12 @@ private fun BalanceSummaryCard(model: GroupScreenModel) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
+            .padding(horizontal = SpliitDimens.ScreenGutter, vertical = 8.dp),
+        shape = RoundedCornerShape(SpliitDimens.CardCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            modifier = Modifier.padding(SpliitDimens.CardPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -489,8 +518,8 @@ private fun ExpenseListSkeleton() {
         item {
             SkeletonCard(
                 height = 92.dp,
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(SpliitDimens.CardCorner),
+                modifier = Modifier.padding(horizontal = SpliitDimens.ScreenGutter, vertical = 6.dp),
             )
         }
         items(6) {

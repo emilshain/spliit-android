@@ -40,6 +40,7 @@ import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 
 /**
@@ -105,8 +106,8 @@ fun SettlementsScreen(
 
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(SpliitDimens.ScreenGutter),
+                    verticalArrangement = Arrangement.spacedBy(SpliitDimens.CardSpacing),
                 ) {
                     items(mine) { reimbursement ->
                         SettlementCard(
@@ -135,12 +136,12 @@ private fun SettlementCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SpliitDimens.CardCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(SpliitDimens.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(SpliitDimens.CardSpacing),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Monogram(

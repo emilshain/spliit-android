@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.spliit.data.model.ExpenseDocument
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.pressScale
 import coil.compose.AsyncImage
 
@@ -49,14 +50,17 @@ fun ReceiptPreview(document: ExpenseDocument, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(SpliitDimens.CardCorner),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             AsyncImage(
                 model = document.url,
                 contentDescription = "Receipt photo",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).clickable {
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(SpliitDimens.CardCorner))
+                    .clickable {
                     onDismiss()
                 },
             )
@@ -67,7 +71,7 @@ fun ReceiptPreview(document: ExpenseDocument, onDismiss: () -> Unit) {
 @Composable
 private fun ReceiptTile(document: ExpenseDocument, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(SpliitDimens.TileCorner)
     Surface(
         modifier = Modifier
             .size(76.dp)

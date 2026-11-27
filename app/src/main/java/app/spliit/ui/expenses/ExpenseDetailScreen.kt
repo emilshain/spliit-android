@@ -58,6 +58,7 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SkeletonSection
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.theme.TornReceiptShape
 import java.time.format.DateTimeFormatter
@@ -189,7 +190,7 @@ private fun Receipt(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
+                Column(modifier = Modifier.padding(SpliitDimens.CardPadding)) {
                     Text(
                         text = expense.title,
                         style = SpliitType.Title,
@@ -331,13 +332,16 @@ private fun Receipt(
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(SpliitDimens.TileCorner),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .padding(
+                                horizontal = SpliitDimens.RowPaddingHorizontal,
+                                vertical = SpliitDimens.RowPaddingVertical,
+                            ),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -382,7 +386,7 @@ private fun Overline(text: String) {
 @Composable
 private fun Chip(text: String, icon: ImageVector? = null) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(SpliitDimens.ChipCorner),
         color = MaterialTheme.colorScheme.outlineVariant,
     ) {
         Row(
@@ -429,7 +433,7 @@ private fun ReceiptSkeleton() {
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SkeletonCard(height = 220.dp, shape = RoundedCornerShape(24.dp))
+        SkeletonCard(height = 220.dp, shape = RoundedCornerShape(SpliitDimens.CardCorner))
         SkeletonSection(modifier = Modifier.padding(top = 8.dp))
         repeat(3) { SkeletonRow(trailingWidth = 64.dp) }
     }

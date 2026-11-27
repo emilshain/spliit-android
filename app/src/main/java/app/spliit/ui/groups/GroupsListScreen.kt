@@ -104,6 +104,7 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.PaletteTemplates
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitPalette
@@ -380,26 +381,33 @@ private fun AppearanceSheet(
             Text(
                 text = "Appearance",
                 style = SpliitType.Title,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+                modifier = Modifier.padding(
+                    start = SpliitDimens.ScreenGutter,
+                    end = SpliitDimens.ScreenGutter,
+                    bottom = SpliitDimens.CardSpacing,
+                ),
             )
             ThemeChoice.entries.forEachIndexed { index, option ->
                 val first = index == 0
                 val last = index == ThemeChoice.entries.lastIndex && !offersDynamicColor
                 val shape = RoundedCornerShape(
-                    topStart = if (first) GroupCardCorner else AdjacentCardCorner,
-                    topEnd = if (first) GroupCardCorner else AdjacentCardCorner,
-                    bottomStart = if (last) GroupCardCorner else AdjacentCardCorner,
-                    bottomEnd = if (last) GroupCardCorner else AdjacentCardCorner,
+                    topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                    topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                    bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+                    bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(top = if (first) 0.dp else 2.dp)
+                        .padding(horizontal = SpliitDimens.ScreenGutter)
+                        .padding(top = if (first) 0.dp else SpliitDimens.CardGap)
                         .clip(shape)
                         .background(MaterialTheme.colorScheme.surfaceContainerLow)
                         .clickable { onChoose(option) }
-                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                        .padding(
+                            horizontal = SpliitDimens.RowPaddingHorizontal,
+                            vertical = SpliitDimens.RowPaddingVertical,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -419,16 +427,16 @@ private fun AppearanceSheet(
 
             if (offersDynamicColor) {
                 val lastShape = RoundedCornerShape(
-                    topStart = AdjacentCardCorner,
-                    topEnd = AdjacentCardCorner,
-                    bottomStart = GroupCardCorner,
-                    bottomEnd = GroupCardCorner,
+                    topStart = SpliitDimens.AdjacentCorner,
+                    topEnd = SpliitDimens.AdjacentCorner,
+                    bottomStart = SpliitDimens.CardCorner,
+                    bottomEnd = SpliitDimens.CardCorner,
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(top = 2.dp)
+                        .padding(horizontal = SpliitDimens.ScreenGutter)
+                        .padding(top = SpliitDimens.CardGap)
                         .clip(lastShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerLow)
                         .toggleable(
@@ -436,7 +444,12 @@ private fun AppearanceSheet(
                             role = Role.Switch,
                             onValueChange = onDynamicColorChange,
                         )
-                        .padding(start = 18.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+                        .padding(
+                            start = SpliitDimens.RowPaddingHorizontal,
+                            end = SpliitDimens.CardSpacing,
+                            top = SpliitDimens.RowPaddingVertical,
+                            bottom = SpliitDimens.RowPaddingVertical,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -464,7 +477,12 @@ private fun AppearanceSheet(
                     text = "Color",
                     style = SpliitType.SectionHeader,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(
+                        start = SpliitDimens.ScreenGutter,
+                        end = SpliitDimens.ScreenGutter,
+                        top = SpliitDimens.SectionLabelTop,
+                        bottom = SpliitDimens.RowPaddingVertical,
+                    ),
                 )
                 AppearancePalette.entries.forEachIndexed { index, template ->
                     PaletteRow(
@@ -493,10 +511,10 @@ private fun PaletteRow(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(
-        topStart = if (first) GroupCardCorner else AdjacentCardCorner,
-        topEnd = if (first) GroupCardCorner else AdjacentCardCorner,
-        bottomStart = if (last) GroupCardCorner else AdjacentCardCorner,
-        bottomEnd = if (last) GroupCardCorner else AdjacentCardCorner,
+        topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+        topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+        bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+        bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
     )
     Row(
         modifier = Modifier
@@ -545,10 +563,6 @@ private fun ThemeChoice.label(): String = when (this) {
     ThemeChoice.Dark -> "Dark"
 }
 
-/** A card's own corners, and the smaller ones it shares with the card above or below it. */
-private val GroupCardCorner = 22.dp
-private val AdjacentCardCorner = 10.dp
-
 /**
  * The one way in to a new group, at the bottom right where an add belongs.
  *
@@ -591,7 +605,7 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
     // rounds out to a circle while it is open, so the X sits in a shape that says "close" rather
     // than a rotated plus in a square. 56dp tall, so half of it is a circle.
     val corner by animateDpAsState(
-        targetValue = if (open) 28.dp else 18.dp,
+        targetValue = if (open) 28.dp else SpliitDimens.FabCorner,
         animationSpec = SpliitMotion.spatialFast(),
         label = "add button corner",
     )
@@ -820,7 +834,12 @@ private fun SectionHeader(text: String) {
         text = text,
         style = SpliitType.SectionHeader,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+        modifier = Modifier.padding(
+            start = SpliitDimens.SectionLabelStart,
+            end = SpliitDimens.SectionLabelStart,
+            top = SpliitDimens.SectionLabelTop,
+            bottom = SpliitDimens.RowPaddingVertical,
+        ),
     )
 }
 
@@ -851,18 +870,21 @@ private fun GroupRow(
     // Cards that touch are one group: the sides they share take the small corner and the sides
     // facing air keep the large one, so a section reads as a stack rather than a pile of tiles.
     val shape = RoundedCornerShape(
-        topStart = if (first) GroupCardCorner else AdjacentCardCorner,
-        topEnd = if (first) GroupCardCorner else AdjacentCardCorner,
-        bottomStart = if (last) GroupCardCorner else AdjacentCardCorner,
-        bottomEnd = if (last) GroupCardCorner else AdjacentCardCorner,
+        topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+        topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+        bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+        bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = SpliitDimens.ScreenGutter)
             // Neighbours nearly touch; only the top of a section gets air above it.
-            .padding(top = if (first) 6.dp else 0.dp, bottom = 2.dp),
+            .padding(
+                top = if (first) SpliitDimens.CardSpacing / 2 else 0.dp,
+                bottom = SpliitDimens.CardGap,
+            ),
     ) {
         ExpressiveSwipe(
             modifier = Modifier.fillMaxWidth(),
@@ -903,7 +925,10 @@ private fun GroupRow(
                         // The card dips under the finger and settles back on a spring, with no
                         // ripple spreading across it.
                         .pressScale(interaction, pressedScale = 0.98f)
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                        .padding(
+                            horizontal = SpliitDimens.RowPaddingHorizontal,
+                            vertical = SpliitDimens.RowPaddingVertical,
+                        ),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

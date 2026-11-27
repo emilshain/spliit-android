@@ -204,7 +204,10 @@ private fun SuggestedPaymentsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onToggle)
-                    .padding(horizontal = SpliitDimens.CardPadding, vertical = 14.dp),
+                    .padding(
+                        horizontal = SpliitDimens.CardPadding,
+                        vertical = SpliitDimens.RowPaddingVertical,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -269,14 +272,12 @@ private fun SuggestedPaymentsCard(
 
 /** The two corners a stacked card owns, and the two it shares with the card beside it. */
 private fun stackedShape(first: Boolean, last: Boolean): RoundedCornerShape = RoundedCornerShape(
-    topStart = if (first) CardCorner else AdjacentCorner,
-    topEnd = if (first) CardCorner else AdjacentCorner,
-    bottomStart = if (last) CardCorner else AdjacentCorner,
-    bottomEnd = if (last) CardCorner else AdjacentCorner,
+    topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+    topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+    bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+    bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
 )
 
-private val CardCorner = 22.dp
-private val AdjacentCorner = 10.dp
 
 /**
  * The reader's own balance, and the way into the payments that would settle it.
@@ -303,11 +304,11 @@ private fun YouCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(CardCorner),
+        shape = RoundedCornerShape(SpliitDimens.CardCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            modifier = Modifier.padding(SpliitDimens.CardPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -406,7 +407,10 @@ private fun BalanceRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(
+                horizontal = SpliitDimens.RowPaddingHorizontal,
+                vertical = SpliitDimens.RowPaddingVertical,
+            ),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -543,7 +547,7 @@ private fun BalancesSkeleton() {
             .padding(start = 16.dp, end = 16.dp, top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SkeletonCard(height = 132.dp, shape = RoundedCornerShape(24.dp))
+        SkeletonCard(height = 132.dp, shape = RoundedCornerShape(SpliitDimens.CardCorner))
         SkeletonSection(modifier = Modifier.padding(top = 10.dp))
         repeat(3) {
             SkeletonRow(trailingWidth = 64.dp)

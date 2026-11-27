@@ -1383,21 +1383,18 @@ private fun Card(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(
-            topStart = if (first) SettingsCardCorner else SettingsSharedCorner,
-            topEnd = if (first) SettingsCardCorner else SettingsSharedCorner,
-            bottomStart = if (last) SettingsCardCorner else SettingsSharedCorner,
-            bottomEnd = if (last) SettingsCardCorner else SettingsSharedCorner,
+            topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+            topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+            bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
+            bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
         ),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 0.dp,
     ) {
-        Box(modifier = Modifier.padding(16.dp)) { content() }
+        Box(modifier = Modifier.padding(SpliitDimens.CardPadding)) { content() }
     }
 }
 
-/** The corners a settings card owns at the ends of the stack, and shares in the middle. */
-private val SettingsCardCorner = 22.dp
-private val SettingsSharedCorner = 10.dp
 
 @Composable
 private fun Fact(label: String, value: String) {
@@ -1437,7 +1434,11 @@ private fun GroupPageSkeleton() {
         )
         SkeletonBox(
             modifier = Modifier
-                .padding(start = 16.dp, end = 16.dp, top = 24.dp)
+                .padding(
+                    start = SpliitDimens.ScreenGutter,
+                    end = SpliitDimens.ScreenGutter,
+                    top = SpliitDimens.CardPadding + SpliitDimens.CardSpacing / 2,
+                )
                 .fillMaxWidth()
                 .height(44.dp),
             shape = RoundedCornerShape(50),
@@ -1461,9 +1462,9 @@ private fun SettingsSkeleton() {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         SkeletonSection(modifier = Modifier.padding(bottom = 8.dp))
-        SkeletonCard(height = 180.dp, shape = RoundedCornerShape(22.dp))
-        SkeletonCard(height = 56.dp, shape = RoundedCornerShape(10.dp))
-        SkeletonCard(height = 76.dp, shape = RoundedCornerShape(10.dp))
-        SkeletonCard(height = 56.dp, shape = RoundedCornerShape(22.dp))
+        SkeletonCard(height = 180.dp, shape = RoundedCornerShape(SpliitDimens.CardCorner))
+        SkeletonCard(height = 56.dp, shape = RoundedCornerShape(SpliitDimens.AdjacentCorner))
+        SkeletonCard(height = 76.dp, shape = RoundedCornerShape(SpliitDimens.AdjacentCorner))
+        SkeletonCard(height = 56.dp, shape = RoundedCornerShape(SpliitDimens.CardCorner))
     }
 }

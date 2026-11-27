@@ -123,12 +123,24 @@ fun ExpenseFormSheet(
     // The photograph the camera is writing to, between the tap and its result.
     var cameraTarget by remember { mutableStateOf<Uri?>(null) }
 
-    fun upload(uri: Uri) {
+    /**
+     * Reads the photograph and sends it, trying each of [candidates] in turn.
+     *
+     * A camera is asked to write the picture into a file this app owns, but it may hand back a
+     * URI of its own as well, and that one is not always readable here — the grant belongs to the
+     * camera, not to this form. So both are tried: the one the camera returned, then the file it
+     * was told to write into.
+     */
+    fun upload(candidates: List<Uri>) {
         uploadingReceipt = true
         receiptFailure = null
         scope.launch {
             try {
-                val photo = withContext(Dispatchers.IO) { ReceiptPhotos.read(context, uri) }
+                val photo = withContext(Dispatchers.IO) {
+                    candidates.firstNotNullOfOrNull { candidate ->
+                        runCatching { ReceiptPhotos.read(context, candidate) }.getOrNull()
+                    }
+                } ?: throw IllegalArgumentException("That photo couldn’t be opened.")
                 val document = client.uploadDocument(
                     bytes = photo.bytes,
                     mimeType = photo.mimeType,
@@ -158,8 +170,8 @@ fun ExpenseFormSheet(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
-        val chosen = result.data?.data ?: cameraTarget
-        if (chosen != null) upload(chosen)
+        val chosen = listOfNotNull(result.data?.data, cameraTarget).distinct()
+        if (chosen.isNotEmpty()) upload(chosen)
     }
 
     fun pickReceipt() {
