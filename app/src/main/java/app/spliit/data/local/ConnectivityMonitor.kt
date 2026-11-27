@@ -8,7 +8,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Whether the phone has a network at all, as a flow of changes.
@@ -75,5 +74,5 @@ class ConnectivityMonitor(context: Context) {
             .onFailure { trySend(true) }
         trySend(isOnline)
         awaitClose { runCatching { current.unregisterNetworkCallback(callback) } }
-    }.conflate().distinctUntilChanged()
+    }.conflate()
 }

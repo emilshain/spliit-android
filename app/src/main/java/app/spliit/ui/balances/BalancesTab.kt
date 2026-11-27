@@ -37,11 +37,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Balance
@@ -392,17 +395,27 @@ private fun BalanceRow(
     isYou: Boolean,
     formatter: app.spliit.domain.MoneyFormatter,
 ) {
+    // The monogram takes the height of the name and the bar it sits beside: a fixed circle in a
+    // taller row is a circle with empty card above and below it. The column is measured rather
+    // than asked for its intrinsic height, because intrinsics cannot cross a subcomposition.
+    var lineHeightPx by remember { mutableIntStateOf(0) }
+    val avatarSize = with(LocalDensity.current) {
+        if (lineHeightPx > 0) lineHeightPx.toDp() else 26.dp
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        // Centred rather than top-aligned: the name and the bar make the row taller than the
-        // monogram, and an avatar pinned to the top leaves a strip of empty card underneath it.
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Monogram(name = participant.name, colorIndex = position, size = 26.dp)
+        Monogram(name = participant.name, colorIndex = position, size = avatarSize)
 
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .onSizeChanged { lineHeightPx = it.height },
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

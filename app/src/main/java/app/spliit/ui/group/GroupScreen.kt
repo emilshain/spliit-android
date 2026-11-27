@@ -277,15 +277,12 @@ fun GroupScreen(
     LaunchedEffect(model) { model.start() }
 
     // Coming back into signal is the moment the backlog can go; it must not wait for the screen
-    // to be reopened. The first reading is already true when the screen opens, so only a change
-    // after it counts.
+    // to be reopened. Every reading that says a network is there is worth acting on: the model
+    // does nothing when there is nothing waiting, and a missed change of state - the phone
+    // reporting a network before it is usable, or two callbacks in a row - must not strand a
+    // change on disk.
     LaunchedEffect(model) {
-        var announced = false
         container.connectivity.online.collect { online ->
-            if (!announced) {
-                announced = true
-                return@collect
-            }
             if (online) model.retryWhenBackOnline()
         }
     }

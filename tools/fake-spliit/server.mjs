@@ -69,6 +69,49 @@ for (let i = 1; i <= EXTRA_EXPENSES; i++) {
   });
 }
 
+const groupParticipants = JSON.parse(fixtures["groups.get"]).result.data.json.group.participants;
+const categoryList = JSON.parse(fixtures["categories.list"]).result.data.json.categories;
+
+/** The request body, as the client sent it: a plain JSON tRPC envelope. */
+function parseBody(body) {
+  try {
+    const parsed = JSON.parse(body || "{}");
+    // The client sends its input inside a superjson envelope.
+    return parsed && typeof parsed.json === "object" && parsed.json !== null ? parsed.json : parsed;
+  } catch {
+    return {};
+  }
+}
+
+/** An expense row in the shape the list and the stats are served in. */
+function expenseFromValues(id, values, previous = null) {
+  const participant = (participantId) =>
+    groupParticipants.find((entry) => entry.id === participantId) ||
+    previous?.paidFor?.find((entry) => entry.participant.id === participantId)?.participant || {
+      id: participantId,
+      name: "Someone",
+    };
+  const categoryId = values.category ?? previous?.category?.id ?? 0;
+  const category = categoryList.find((entry) => entry.id === categoryId) || null;
+  return {
+    id,
+    title: values.title ?? previous?.title ?? "Untitled",
+    amount: values.amount ?? previous?.amount ?? 0,
+    createdAt: previous?.createdAt ?? new Date().toISOString(),
+    expenseDate: values.expenseDate ?? previous?.expenseDate ?? new Date().toISOString(),
+    isReimbursement: values.isReimbursement ?? previous?.isReimbursement ?? false,
+    splitMode: values.splitMode ?? previous?.splitMode ?? "EVENLY",
+    recurrenceRule: values.recurrenceRule === "NONE" ? null : previous?.recurrenceRule ?? null,
+    category,
+    paidBy: participant(values.paidBy ?? previous?.paidBy?.id),
+    paidFor: (values.paidFor ?? previous?.paidFor ?? []).map((share) => ({
+      participant: participant(share.participant.id ?? share.participant),
+      shares: share.shares,
+    })),
+    _count: { documents: 0 },
+  };
+}
+
 const notFound = (path) =>
   JSON.stringify({
     error: {
@@ -183,6 +226,31 @@ const server = createServer((request, response) => {
       case "groups.stats.get":
         send(stats(input));
         return;
+      case "groups.expenses.create": {
+        const input = parseBody(body);
+        const values = input.expenseFormValues || {};
+        const id = input.expenseId || `fake${Date.now()}`;
+        const expense = expenseFromValues(id, values);
+        expenses.unshift(expense);
+        console.log(`  -> created "${expense.title}" (${expenses.length} total)`);
+        send(JSON.stringify({ result: { data: { json: { expenseId: id } } } }));
+        return;
+      }
+      case "groups.expenses.update": {
+        const input = parseBody(body);
+        const id = input.expenseId || stringField(input, "expenseId");
+        const at = expenses.findIndex((expense) => expense.id === id);
+        if (at === -1) {
+          console.log(`  -> 404 (no expense ${id})`);
+          send(notFound(path), 404);
+          return;
+        }
+        const values = input.expenseFormValues || {};
+        expenses[at] = expenseFromValues(id, values, expenses[at]);
+        console.log(`  -> updated "${expenses[at].title}"`);
+        send(JSON.stringify({ result: { data: { json: { expenseId: id } } } }));
+        return;
+      }
       case "groups.expenses.delete": {
         const id = stringField(input, "expenseId");
         const at = expenses.findIndex((expense) => expense.id === id);

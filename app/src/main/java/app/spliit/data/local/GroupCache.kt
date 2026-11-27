@@ -116,6 +116,8 @@ data class CachedGroup(
     val activities: List<Activity> = emptyList(),
     /** Totals as last answered, so the totals tab opens with figures rather than a skeleton. */
     val stats: GroupStatsResponse? = null,
+    /** Who those totals were answered for; another person's figures are not shown under a name. */
+    val statsParticipantId: String? = null,
     /** The category breakdown as last folded. */
     val categorySpending: List<CategorySpending> = emptyList(),
     /** Expenses whose detail has been opened, so their pages open without a network too. */
