@@ -13,6 +13,17 @@ It began as a 1:1 port of the iOS app ([spliit-app/spliit-ios](https://github.co
 which remains the reference for behaviour and layout, against the web app's own API
 ([spliit-app/spliit](https://github.com/spliit-app/spliit)).
 
+## Screens
+
+Captured on the API 30 emulator against the fake instance in `tools/fake-spliit`.
+
+| | |
+|:---:|:---:|
+| <img src="docs/images/groups.png" width="260" alt="The groups list"> | <img src="docs/images/expenses.png" width="260" alt="A group's expense list"> |
+| **Groups** — every group, the ones you starred first | **Expenses** — a group's spending by day, who paid, and what each row means for you |
+| <img src="docs/images/balances.png" width="260" alt="The balances tab"> | <img src="docs/images/totals.png" width="260" alt="The totals tab"> |
+| **Balances** — what everyone is owed or owes, and the fewest payments that settle it | **Totals** — what the group spent, your own part of it, and the breakdown by participant |
+
 ## Features
 
 ### Groups
