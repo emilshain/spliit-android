@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.ConnectionSpec
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
@@ -326,6 +327,12 @@ class TrpcClient(
         /**
          * `OkHttpClient` default is 10 seconds, which a person reads as the app having hung.
          * Failing at 20 lets the screen offer a retry while the attempt is still remembered.
+         *
+         * TLS 1.2 or later is required, spelled out rather than inherited from the library's
+         * defaults: a group's expenses are passwords and money, and an instance old enough to
+         * negotiate TLS 1.0 does not get to see them. Cleartext stays allowed because Spliit is
+         * self-hosted and [ServerInstance] accepts an `http` instance on a home network, where
+         * there is no certificate to insist on.
          */
         val defaultCallFactory: Call.Factory = OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -333,6 +340,7 @@ class TrpcClient(
             .writeTimeout(20, TimeUnit.SECONDS)
             .callTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.CLEARTEXT))
             .build()
     }
 }
