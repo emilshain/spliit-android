@@ -499,9 +499,12 @@ fun ExpenseFormSheet(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     ) {
                         Column(
+                            // Tighter than a card's frame: a participant row is a name and a
+                            // share, and in the evenly tab that is one short line, so the
+                            // card's own padding left more space than content.
                             modifier = Modifier.padding(
                                 horizontal = SpliitDimens.RowPaddingHorizontal,
-                                vertical = SpliitDimens.RowPaddingVertical,
+                                vertical = SpliitDimens.Space100,
                             ),
                         ) {
                             ParticipantRow(
