@@ -37,24 +37,24 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -89,6 +89,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
@@ -469,14 +471,24 @@ fun GroupScreen(
                 ),
                     title = {
                         if (selectingExpenses) {
-                            Text(
-                                text = if (expenseSelection.count == 1) {
-                                    "1 selected"
-                                } else {
-                                    "${expenseSelection.count} selected"
-                                },
-                                style = SpliitType.RowTitle,
-                            )
+                            // Left, like the home page's: the count is what the bar is saying, and
+                            // the actions it applies to are on the right. Unbolded and in the
+                            // highlight's tone, so it states the selection rather than announcing
+                            // it over the group's name.
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = if (expenseSelection.count == 1) {
+                                        "1 selected"
+                                    } else {
+                                        "${expenseSelection.count} selected"
+                                    },
+                                    style = SpliitType.RowTitle,
+                                    fontWeight = FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = if (destination == GroupDestination.SEARCH) {
@@ -519,14 +531,19 @@ fun GroupScreen(
                         ) {
                             Icon(
                                 when {
-                                    selectingExpenses -> Icons.Filled.Close
-                                    destination == GroupDestination.SEARCH -> Icons.Filled.Close
-                                    else -> Icons.AutoMirrored.Filled.ArrowBack
+                                    selectingExpenses -> Icons.Outlined.Close
+                                    destination == GroupDestination.SEARCH -> Icons.Outlined.Close
+                                    else -> Icons.AutoMirrored.Outlined.ArrowBack
                                 },
                                 contentDescription = when {
                                     selectingExpenses -> "Stop selecting"
                                     destination == GroupDestination.SEARCH -> "Close search"
                                     else -> "Back"
+                                },
+                                tint = if (selectingExpenses) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                } else {
+                                    LocalContentColor.current
                                 },
                             )
                         }
@@ -538,7 +555,11 @@ fun GroupScreen(
                                 IconButton(
                                     onClick = { expenseSelection.ids.firstOrNull()?.let(::editExpense) },
                                 ) {
-                                    Icon(Icons.Filled.Edit, contentDescription = "Edit expense")
+                                    Icon(
+                                        Icons.Outlined.Edit,
+                                        contentDescription = "Edit expense",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
                                 }
                             }
                             IconButton(
@@ -550,10 +571,18 @@ fun GroupScreen(
                                     }
                                 },
                             ) {
-                                Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
+                                Icon(
+                                    Icons.Outlined.SelectAll,
+                                    contentDescription = "Select all",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
                             }
                             IconButton(onClick = { confirmDeleteExpenses = true }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Delete expenses")
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = "Delete expenses",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
                             }
                         } else if (destination == GroupDestination.TABS && group != null) {
                             // The search bar scrolls under the header, so the header carries a
@@ -561,7 +590,7 @@ fun GroupScreen(
                             if (searchCollapsed && pagerState.currentPage == 0) {
                                 IconButton(onClick = { destination = GroupDestination.SEARCH }) {
                                     Icon(
-                                        Icons.Filled.Search,
+                                        Icons.Outlined.Search,
                                         contentDescription = "Search expenses",
                                     )
                                 }
@@ -572,7 +601,7 @@ fun GroupScreen(
                             Box {
                                 IconButton(onClick = { groupMenuOpen = true }) {
                                     Icon(
-                                        Icons.Filled.MoreVert,
+                                        Icons.Outlined.MoreVert,
                                         contentDescription = "Group actions",
                                     )
                                 }
@@ -582,7 +611,7 @@ fun GroupScreen(
                                 ) {
                                     ExpressiveMenuItem(
                                         text = "Share",
-                                        leadingIcon = Icons.Filled.Share,
+                                        leadingIcon = Icons.Outlined.Share,
                                         onClick = {
                                             groupMenuOpen = false
                                             shareOpen = true
@@ -590,7 +619,7 @@ fun GroupScreen(
                                     )
                                     ExpressiveMenuItem(
                                         text = "Edit group",
-                                        leadingIcon = Icons.Filled.Edit,
+                                        leadingIcon = Icons.Outlined.Edit,
                                         onClick = {
                                             groupMenuOpen = false
                                             destination = GroupDestination.SETTINGS
@@ -602,7 +631,7 @@ fun GroupScreen(
                                         } else {
                                             "Import from CSV"
                                         },
-                                        leadingIcon = Icons.Filled.UploadFile,
+                                        leadingIcon = Icons.Outlined.UploadFile,
                                         onClick = {
                                             groupMenuOpen = false
                                             openCsv.launch(
@@ -616,7 +645,7 @@ fun GroupScreen(
                                     )
                                     ExpressiveMenuItem(
                                         text = if (isExporting) "Preparing the file…" else "Export as CSV",
-                                        leadingIcon = Icons.Filled.FileDownload,
+                                        leadingIcon = Icons.Outlined.FileDownload,
                                         onClick = {
                                             groupMenuOpen = false
                                             exportCsv()
@@ -624,7 +653,7 @@ fun GroupScreen(
                                     )
                                     ExpressiveMenuItem(
                                         text = "Delete group",
-                                        leadingIcon = Icons.Filled.Delete,
+                                        leadingIcon = Icons.Outlined.Delete,
                                         destructive = true,
                                         onClick = {
                                             groupMenuOpen = false
@@ -671,7 +700,7 @@ fun GroupScreen(
                     group == null && model.isLoadingGroup -> GroupPageSkeleton()
 
                     group == null && model.didFailToLoad -> EmptyState(
-                        art = EmptyStateArt.Icon(Icons.Filled.Warning),
+                        art = EmptyStateArt.Icon(Icons.Outlined.Warning),
                         title = "Couldn’t load the group",
                         description = model.loadFailure,
                     ) {
@@ -1091,7 +1120,7 @@ private fun GroupSubtitle(group: Group, model: GroupScreenModel) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
-            Icons.Filled.People,
+            Icons.Outlined.People,
             contentDescription = null,
             modifier = Modifier.size(13.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1180,7 +1209,7 @@ private fun EditGroupScreen(
                 title = { Text("Edit group", style = SpliitType.Title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
             )
@@ -1299,7 +1328,7 @@ private fun SettingsTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Icon(
-                            Icons.Filled.ExpandMore,
+                            Icons.Outlined.ExpandMore,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1370,7 +1399,7 @@ private fun SettingsTab(
                                     },
                                 ) {
                                     Icon(
-                                        Icons.Filled.Delete,
+                                        Icons.Outlined.Delete,
                                         contentDescription = "Remove participant",
                                     )
                                 }
@@ -1393,7 +1422,7 @@ private fun SettingsTab(
                             )
                         },
                     ) {
-                        Icon(Icons.Filled.PersonAdd, contentDescription = null)
+                        Icon(Icons.Outlined.PersonAdd, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Add participant")
                     }
@@ -1420,7 +1449,7 @@ private fun SettingsTab(
                     )
                 }
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

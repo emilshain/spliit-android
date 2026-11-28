@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -102,7 +102,7 @@ fun TotalsTab(
 
     when {
         model.statsUnavailable -> EmptyState(
-            art = EmptyStateArt.Icon(Icons.Filled.BarChart),
+            art = EmptyStateArt.Icon(Icons.Outlined.BarChart),
             title = "No totals on this server",
             description = "This Spliit instance doesn’t offer them.",
         )
@@ -111,7 +111,7 @@ fun TotalsTab(
             TotalsSkeleton()
 
         model.didFailToLoad || model.didFailToLoadStats -> EmptyState(
-            art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
+            art = EmptyStateArt.Icon(Icons.Outlined.WifiOff),
             title = if (model.didFailToLoad) {
                 "Couldn’t load this group"
             } else {

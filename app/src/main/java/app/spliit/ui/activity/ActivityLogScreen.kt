@@ -17,14 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,7 +99,7 @@ fun ActivityTab(
                 model.isLoadingActivities -> ActivitySkeleton()
 
                 model.didFailToLoad || model.didFailToLoadActivities -> EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
+                    art = EmptyStateArt.Icon(Icons.Outlined.WifiOff),
                     title = if (model.didFailToLoad) {
                         "Couldn’t load this group"
                     } else {
@@ -117,7 +117,7 @@ fun ActivityTab(
                 // The sections rather than the raw list: a log made entirely of entries this
                 // version cannot describe has nothing to draw.
                 sections.isEmpty() -> EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.History),
+                    art = EmptyStateArt.Icon(Icons.Outlined.History),
                     title = "No activity yet",
                 )
 
@@ -255,11 +255,11 @@ private fun ActivityRow(
 
 /** The same glyphs the app uses for these actions elsewhere. */
 private fun symbol(type: ActivityType): ImageVector = when (type) {
-    ActivityType.CreateExpense -> Icons.Filled.Add
-    ActivityType.UpdateExpense -> Icons.Filled.Edit
-    ActivityType.DeleteExpense -> Icons.Filled.Delete
-    ActivityType.UpdateGroup -> Icons.Filled.Settings
-    is ActivityType.Unknown -> Icons.AutoMirrored.Filled.HelpOutline
+    ActivityType.CreateExpense -> Icons.Outlined.Add
+    ActivityType.UpdateExpense -> Icons.Outlined.Edit
+    ActivityType.DeleteExpense -> Icons.Outlined.Delete
+    ActivityType.UpdateGroup -> Icons.Outlined.Settings
+    is ActivityType.Unknown -> Icons.AutoMirrored.Outlined.HelpOutline
 }
 
 /**

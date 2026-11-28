@@ -60,7 +60,9 @@ object SpliitDimens {
 
     /** The inset of a card's contents. Every list row in the app uses these two. */
     val RowPaddingHorizontal = Space200
-    val RowPaddingVertical = Space150
+    // The same as the sides: a card's content sits in an even frame, so no card looks like it is
+    // leaning towards one edge.
+    val RowPaddingVertical = Space200
 
     /** The gap between two cards that are separate things, rather than one stack. */
     val CardSpacing = Space150

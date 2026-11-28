@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.AddAPhoto
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -75,7 +75,7 @@ fun ReceiptAttachments(
                 Text("Uploading…")
             } else {
                 Icon(
-                    Icons.Filled.AddAPhoto,
+                    Icons.Outlined.AddAPhoto,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -144,7 +144,7 @@ private fun ReceiptThumbnail(document: ExpenseDocument, onRemove: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Filled.Close,
+                Icons.Outlined.Close,
                 contentDescription = "Remove receipt",
                 tint = MaterialTheme.colorScheme.inverseOnSurface,
                 modifier = Modifier.size(16.dp),

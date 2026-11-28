@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -144,7 +144,7 @@ fun ExpenseSearchTab(
                 // prompt back on screen between characters.
                 when {
                     trimmed.isEmpty() -> EmptyState(
-                        art = EmptyStateArt.Icon(Icons.Filled.Search),
+                        art = EmptyStateArt.Icon(Icons.Outlined.Search),
                         title = "Search this group",
                         description = "Type a word from the expense you’re looking for.",
                     )
@@ -152,13 +152,13 @@ fun ExpenseSearchTab(
                     // Only once the answer on screen belongs to the words in the field: during
                     // the debounce the previous query's verdict must not stand in for this one's.
                     model.didFailToSearch && model.filter == trimmed -> EmptyState(
-                        art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
+                        art = EmptyStateArt.Icon(Icons.Outlined.WifiOff),
                         title = "Couldn’t search",
                         description = model.searchFailure ?: "The server didn’t respond.",
                     )
 
                     model.hasNoMatches && model.filter == trimmed -> EmptyState(
-                        art = EmptyStateArt.Icon(Icons.Filled.Search),
+                        art = EmptyStateArt.Icon(Icons.Outlined.Search),
                         title = "No matching expenses",
                         description = "No expense here matches “${model.filter.orEmpty()}”.",
                     )
@@ -171,7 +171,7 @@ fun ExpenseSearchTab(
                     // The server matched something and the filter took it all away: say which
                     // filter did that, rather than claiming the group has no such expense.
                     filterHidesEverything -> EmptyState(
-                        art = EmptyStateArt.Icon(Icons.Filled.Search),
+                        art = EmptyStateArt.Icon(Icons.Outlined.Search),
                         title = "No matching expenses",
                         description = "Nothing paid by ${filterName ?: "that person"} matches " +
                             "“${model.filter.orEmpty()}”.",
@@ -217,7 +217,7 @@ private fun SearchFilterButton(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    Icons.Filled.FilterList,
+                    Icons.Outlined.FilterList,
                     contentDescription = "Filter results",
                     modifier = Modifier.size(20.dp),
                     tint = if (active) {

@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -108,7 +108,7 @@ fun GroupShareSheet(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        if (didCopy) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                        if (didCopy) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -121,7 +121,7 @@ fun GroupShareSheet(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        Icons.Filled.Share,
+                        Icons.Outlined.Share,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )

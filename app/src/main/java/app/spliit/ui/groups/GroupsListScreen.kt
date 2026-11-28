@@ -11,6 +11,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideOutVertically
@@ -40,21 +42,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PlaylistRemove
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.PlaylistRemove
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,6 +91,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -252,9 +255,9 @@ fun GroupsListScreen(
                         // the selection replaces them with the things that are.
                         IconButton(onClick = { selection.clear() }) {
                             Icon(
-                                Icons.Filled.Close,
+                                Icons.Outlined.Close,
                                 contentDescription = "Stop selecting",
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                         // Row-sized rather than the page title's size: the bar has to hold the
@@ -266,6 +269,10 @@ fun GroupsListScreen(
                                 "${selection.count} selected"
                             },
                             style = SpliitType.RowTitle,
+                            // The count is a label, not a heading: unbolded, in the highlight's
+                            // own tone, so the bar states the selection instead of shouting it.
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
@@ -280,9 +287,9 @@ fun GroupsListScreen(
                                 },
                             ) {
                                 Icon(
-                                    Icons.Filled.Edit,
+                                    Icons.Outlined.Edit,
                                     contentDescription = "Edit group",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
                             }
                         }
@@ -297,23 +304,23 @@ fun GroupsListScreen(
                             },
                         ) {
                             Icon(
-                                Icons.Filled.SelectAll,
+                                Icons.Outlined.SelectAll,
                                 contentDescription = "Select all",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                         IconButton(onClick = { starSelection() }) {
                             Icon(
-                                Icons.Filled.Star,
+                                Icons.Outlined.Star,
                                 contentDescription = "Star or unstar",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                         IconButton(onClick = { archiveSelection() }) {
                             Icon(
-                                Icons.Filled.Archive,
+                                Icons.Outlined.Archive,
                                 contentDescription = "Archive or unarchive",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                         // Removing only forgets this device's copy, which is why it is not in
@@ -323,9 +330,9 @@ fun GroupsListScreen(
                         Box {
                             IconButton(onClick = { selectionMenuOpen = true }) {
                                 Icon(
-                                    Icons.Filled.MoreVert,
+                                    Icons.Outlined.MoreVert,
                                     contentDescription = "More actions",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
                             }
                             ExpressiveMenu(
@@ -334,7 +341,7 @@ fun GroupsListScreen(
                             ) {
                                 ExpressiveMenuItem(
                                     text = "Remove from this phone",
-                                    leadingIcon = Icons.Filled.PlaylistRemove,
+                                    leadingIcon = Icons.Outlined.PlaylistRemove,
                                     onClick = {
                                         selectionMenuOpen = false
                                         removeSelection()
@@ -356,9 +363,9 @@ fun GroupsListScreen(
                         ) {
                             Icon(
                                 imageVector = if (searching) {
-                                    Icons.Filled.Close
+                                    Icons.Outlined.Close
                                 } else {
-                                    Icons.Filled.Search
+                                    Icons.Outlined.Search
                                 },
                                 contentDescription = if (searching) {
                                     "Close search"
@@ -372,7 +379,7 @@ fun GroupsListScreen(
                         // rather than about a group.
                         IconButton(onClick = { appearanceOpen = true }) {
                             Icon(
-                                imageVector = Icons.Filled.Settings,
+                                imageVector = Icons.Outlined.Settings,
                                 contentDescription = "Appearance",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -402,10 +409,16 @@ fun GroupsListScreen(
             // it arrived — downwards, on the spring, rather than vanishing.
             AnimatedVisibility(
                 visible = !selection.active,
-                enter = slideInVertically(SpliitMotion.spatialDefault()) { height -> height } +
-                    fadeIn(SpliitMotion.effectsDefault()),
-                exit = slideOutVertically(SpliitMotion.spatialFast()) { height -> height } +
-                    fadeOut(SpliitMotion.effectsFast()),
+                // SwiftUI's `.move(edge: .bottom).combined(with: .opacity)` on `.snappy`: the
+                // button is pushed off the bottom by the selection and springs back when it
+                // ends, with a little scale so it reads as leaving rather than sliding under
+                // something.
+                enter = slideInVertically(SpliitMotion.snappy()) { height -> height } +
+                    fadeIn(SpliitMotion.snappy()) +
+                    scaleIn(SpliitMotion.snappy(), initialScale = 0.9f),
+                exit = slideOutVertically(SpliitMotion.snappy()) { height -> height } +
+                    fadeOut(SpliitMotion.snappy()) +
+                    scaleOut(SpliitMotion.snappy(), targetScale = 0.9f),
             ) {
                 AddGroupButton(
                     onCreate = { sheet = GroupsSheet.Create },
@@ -444,7 +457,7 @@ fun GroupsListScreen(
                 }
             } else if (matches.isEmpty()) {
                 EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.Search),
+                    art = EmptyStateArt.Icon(Icons.Outlined.Search),
                     title = "No groups match “${query.trim()}”",
                 ) {
                     Button(onClick = { query = "" }) { Text("Clear search") }
@@ -593,7 +606,7 @@ private fun AppearanceSheet(
                     )
                     if (option == choice) {
                         Icon(
-                            imageVector = Icons.Filled.Check,
+                            imageVector = Icons.Outlined.Check,
                             contentDescription = "Selected",
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -712,7 +725,7 @@ private fun PaletteRow(
         )
         if (selected) {
             Icon(
-                imageVector = Icons.Filled.Check,
+                imageVector = Icons.Outlined.Check,
                 contentDescription = "Selected",
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -749,8 +762,8 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
 
     val actions = remember(onCreate, onAddByLink) {
         listOf(
-            FabAction("Create group", Icons.Filled.Add, onCreate),
-            FabAction("Add by link", Icons.Filled.Link, onAddByLink),
+            FabAction("Create group", Icons.Outlined.Add, onCreate),
+            FabAction("Add by link", Icons.Outlined.Link, onAddByLink),
         )
     }
 
@@ -833,7 +846,7 @@ private fun AddGroupButton(onCreate: () -> Unit, onAddByLink: () -> Unit) {
             contentColor = contentColor,
         ) {
             Icon(
-                imageVector = Icons.Filled.Add,
+                imageVector = Icons.Outlined.Add,
                 contentDescription = if (open) "Close" else "Add group",
                 modifier = Modifier.rotate(rotation),
             )
@@ -916,7 +929,7 @@ private fun GroupsList(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Filled.Warning,
+                        Icons.Outlined.Warning,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1075,14 +1088,14 @@ private fun GroupRow(
         ExpressiveSwipe(
             modifier = Modifier.fillMaxWidth(),
             startToEnd = SwipeAction(
-                icon = Icons.Filled.Star,
+                icon = Icons.Outlined.Star,
                 label = if (group.isStarred) "Unstar" else "Star",
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 onAction = onStar,
             ),
             endToStart = SwipeAction(
-                icon = Icons.Filled.Archive,
+                icon = Icons.Outlined.Archive,
                 label = if (group.isArchived) "Unarchive" else "Archive",
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1162,7 +1175,7 @@ private fun GroupRow(
                             SelectionCircle(selected)
                         } else {
                             Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1200,7 +1213,7 @@ private fun GroupMeta(summary: GroupSummary?) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Icon(
-            Icons.Filled.People,
+            Icons.Outlined.People,
             contentDescription = "Participants",
             modifier = Modifier.size(12.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,

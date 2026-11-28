@@ -23,11 +23,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -91,7 +91,7 @@ fun BalancesTab(
         model.isLoadingGroup || model.isLoadingBalances -> BalancesSkeleton()
 
         model.didFailToLoad || model.didFailToLoadBalances -> EmptyState(
-            art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
+            art = EmptyStateArt.Icon(Icons.Outlined.WifiOff),
             title = if (model.didFailToLoad) {
                 "Couldn’t load this group"
             } else {
@@ -340,7 +340,7 @@ private fun YouCard(
                 }
             }
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = "My settlements",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -503,7 +503,7 @@ private fun ReimbursementCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Monogram(name = from?.name.orEmpty(), colorIndex = fromPosition, size = 24.dp)
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
+                    Icons.AutoMirrored.Outlined.ArrowForward,
                     contentDescription = null,
                     modifier = Modifier.padding(horizontal = 4.dp).size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -86,14 +86,21 @@ class SelectionState {
  */
 @Composable
 fun SelectionCircle(selected: Boolean, modifier: Modifier = Modifier) {
+    // A tone of the card's own highlight rather than a colour from outside it: the pick belongs
+    // to the row it sits in, so it reads as that row being chosen rather than as a control that
+    // happens to be nearby.
     val fill by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            Color.Transparent
+        },
         animationSpec = SpliitMotion.effectsDefault(),
         label = "selection circle fill",
     )
     val edge by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.onSecondaryContainer
         } else {
             MaterialTheme.colorScheme.outline
         },
@@ -111,10 +118,10 @@ fun SelectionCircle(selected: Boolean, modifier: Modifier = Modifier) {
     ) {
         if (selected) {
             Icon(
-                Icons.Filled.Check,
+                Icons.Outlined.Check,
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onPrimary,
+                tint = MaterialTheme.colorScheme.secondaryContainer,
             )
         }
     }

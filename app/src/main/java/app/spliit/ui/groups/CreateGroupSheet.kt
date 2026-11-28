@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -358,7 +358,7 @@ fun CreateGroupSheet(
                                     )
                                 },
                             ) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Remove participant")
+                                Icon(Icons.Outlined.Delete, contentDescription = "Remove participant")
                             }
                         }
                         if (hasAttemptedSave) {
@@ -376,7 +376,7 @@ fun CreateGroupSheet(
                         )
                     },
                 ) {
-                    Icon(Icons.Filled.PersonAdd, contentDescription = null)
+                    Icon(Icons.Outlined.PersonAdd, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Add participant")
                 }

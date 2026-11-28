@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -98,7 +98,7 @@ fun ExpenseDetailScreen(
                 title = { Text("Expense", style = SpliitType.RowTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
                 // Two things are done to an expense — changing it and being rid of it — and
@@ -108,7 +108,7 @@ fun ExpenseDetailScreen(
                         Box {
                             IconButton(onClick = { menuOpen = true }) {
                                 Icon(
-                                    Icons.Filled.MoreVert,
+                                    Icons.Outlined.MoreVert,
                                     contentDescription = "Expense actions",
                                 )
                             }
@@ -118,7 +118,7 @@ fun ExpenseDetailScreen(
                             ) {
                                 ExpressiveMenuItem(
                                     text = "Edit",
-                                    leadingIcon = Icons.Filled.Edit,
+                                    leadingIcon = Icons.Outlined.Edit,
                                     onClick = {
                                         menuOpen = false
                                         onEdit()
@@ -126,7 +126,7 @@ fun ExpenseDetailScreen(
                                 )
                                 ExpressiveMenuItem(
                                     text = "Delete",
-                                    leadingIcon = Icons.Filled.Delete,
+                                    leadingIcon = Icons.Outlined.Delete,
                                     destructive = true,
                                     onClick = {
                                         menuOpen = false
@@ -152,7 +152,7 @@ fun ExpenseDetailScreen(
                 isLoading -> ReceiptSkeleton()
 
                 else -> EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.Warning),
+                    art = EmptyStateArt.Icon(Icons.Outlined.Warning),
                     title = "Couldn’t load the expense",
                     description = failure ?: "The server didn’t respond.",
                 ) {
@@ -312,7 +312,7 @@ private fun Receipt(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Filled.People,
+                    Icons.Outlined.People,
                     contentDescription = "Participants",
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

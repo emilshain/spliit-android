@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -626,7 +626,7 @@ fun ExpenseFormSheet(
                             }
                         },
                     ) {
-                        Icon(Icons.Filled.Delete, contentDescription = null)
+                        Icon(Icons.Outlined.Delete, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Delete expense", color = MaterialTheme.colorScheme.error)
                     }

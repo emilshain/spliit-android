@@ -3,6 +3,8 @@ package app.spliit.ui.expenses
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.LocalIndication
@@ -23,12 +25,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -106,7 +108,7 @@ fun ExpenseListTab(
             model.isLoadingExpenses -> ExpenseListSkeleton()
 
             model.didFailToLoad || model.didFailToLoadExpenses -> EmptyState(
-                art = EmptyStateArt.Icon(Icons.Filled.WifiOff),
+                art = EmptyStateArt.Icon(Icons.Outlined.WifiOff),
                 title = if (model.didFailToLoad) {
                     "Couldn’t load this group"
                 } else {
@@ -118,7 +120,7 @@ fun ExpenseListTab(
             }
 
             model.expenses.isEmpty() -> EmptyState(
-                art = EmptyStateArt.Icon(Icons.AutoMirrored.Filled.List),
+                art = EmptyStateArt.Icon(Icons.AutoMirrored.Outlined.List),
                 title = "No expenses yet",
             ) {
                 Button(onClick = onAdd) { Text("Add expense") }
@@ -194,7 +196,7 @@ fun ExpenseListTab(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        Icons.Filled.Warning,
+                                        Icons.Outlined.Warning,
                                         contentDescription = null,
                                         modifier = Modifier.padding(2.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -299,10 +301,15 @@ fun ExpenseListTab(
         // springs, rather than appearing and disappearing between frames.
         AnimatedVisibility(
             visible = !selection.active,
-            enter = slideInVertically(SpliitMotion.spatialDefault()) { height -> height } +
-                fadeIn(SpliitMotion.effectsDefault()),
-            exit = slideOutVertically(SpliitMotion.spatialFast()) { height -> height } +
-                fadeOut(SpliitMotion.effectsFast()),
+            // SwiftUI's `.move(edge: .bottom).combined(with: .opacity)` on `.snappy`, with a touch
+            // of scale: the button is pushed off the bottom when a selection opens and springs
+            // back when it ends.
+            enter = slideInVertically(SpliitMotion.snappy()) { height -> height } +
+                fadeIn(SpliitMotion.snappy()) +
+                scaleIn(SpliitMotion.snappy(), initialScale = 0.9f),
+            exit = slideOutVertically(SpliitMotion.snappy()) { height -> height } +
+                fadeOut(SpliitMotion.snappy()) +
+                scaleOut(SpliitMotion.snappy(), targetScale = 0.9f),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 20.dp, bottom = 24.dp),
@@ -315,7 +322,7 @@ fun ExpenseListTab(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add expense")
+                Icon(Icons.Outlined.Add, contentDescription = "Add expense")
             }
         }
 
@@ -374,7 +381,7 @@ private fun ExpensesToolbar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Filled.Search,
+                    Icons.Outlined.Search,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -402,7 +409,7 @@ private fun ExpensesToolbar(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        Icons.Filled.FilterList,
+                        Icons.Outlined.FilterList,
                         contentDescription = "Filter expenses",
                         modifier = Modifier.size(20.dp),
                         tint = if (active) {

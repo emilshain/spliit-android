@@ -15,9 +15,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,7 +84,7 @@ fun SettlementsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
             )
@@ -93,13 +93,13 @@ fun SettlementsScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 identity == null -> EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.CheckCircle),
+                    art = EmptyStateArt.Icon(Icons.Outlined.CheckCircle),
                     title = "Say who you are",
                     description = "Pick your name on the balances tab.",
                 )
 
                 mine.isEmpty() -> EmptyState(
-                    art = EmptyStateArt.Icon(Icons.Filled.CheckCircle),
+                    art = EmptyStateArt.Icon(Icons.Outlined.CheckCircle),
                     title = "You’re settled up",
                     description = "Nothing is left to pay or collect in this group.",
                 )
@@ -150,7 +150,7 @@ private fun SettlementCard(
                     size = 28.dp,
                 )
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
+                    Icons.AutoMirrored.Outlined.ArrowForward,
                     contentDescription = null,
                     modifier = Modifier.padding(horizontal = 6.dp).size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
