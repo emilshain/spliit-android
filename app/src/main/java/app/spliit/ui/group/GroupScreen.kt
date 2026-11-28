@@ -129,6 +129,7 @@ import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SelectionState
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.totals.TotalsTab
 import java.time.format.DateTimeFormatter
@@ -181,6 +182,17 @@ fun GroupScreen(
     var isLoadingDetail by remember { mutableStateOf(false) }
     var groupMenuOpen by remember { mutableStateOf(false) }
     var searchCollapsed by remember { mutableStateOf(false) }
+
+    /**
+     * The expenses picked out by a long press.
+     *
+     * Only the expenses page has one: leaving the page, or the tab, ends it, so an action can
+     * never be applied to something that is no longer on screen.
+     */
+    val expenseSelection = remember { SelectionState() }
+    var confirmDeleteExpenses by remember { mutableStateOf(false) }
+    val selectingExpenses =
+        expenseSelection.active && destination == GroupDestination.TABS && pagerState.currentPage == 0
 
     // Import and export used to live on the settings screen; they are things done to the group,
     // so they belong in the group's own menu. The state sits here for the same reason.
@@ -293,6 +305,13 @@ fun GroupScreen(
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != 0) searchCollapsed = false
     }
+    LaunchedEffect(pagerState.currentPage, destination) {
+        if (pagerState.currentPage != 0 || destination != GroupDestination.TABS) {
+            expenseSelection.clear()
+        }
+    }
+    // Back leaves the selection first: it is the last thing opened and the least to lose.
+    BackHandler(enabled = selectingExpenses) { expenseSelection.clear() }
 
     // Back leaves the page this screen opened, not the group: search, an expense and the group's
     // settings are all pages of this screen, and closing the group from one of them loses the
@@ -420,10 +439,25 @@ fun GroupScreen(
                 Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
                 CenterAlignedTopAppBar(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    // A selection takes the bar off the page's own background: it is a mode with
+                    // actions in it now, not the group's title.
+                    containerColor = if (selectingExpenses) {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    } else {
+                        MaterialTheme.colorScheme.background
+                    },
                 ),
                     title = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (selectingExpenses) {
+                            Text(
+                                text = if (expenseSelection.count == 1) {
+                                    "1 selected"
+                                } else {
+                                    "${expenseSelection.count} selected"
+                                },
+                                style = SpliitType.RowTitle,
+                            )
+                        } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = if (destination == GroupDestination.SEARCH) {
                                     "Search"
@@ -451,8 +485,10 @@ fun GroupScreen(
                     navigationIcon = {
                         IconButton(
                             onClick = {
-                                when (destination) {
-                                    GroupDestination.SEARCH -> {
+                                when {
+                                    selectingExpenses -> expenseSelection.clear()
+
+                                    destination == GroupDestination.SEARCH -> {
                                         destination = GroupDestination.TABS
                                         query = ""
                                     }
@@ -462,21 +498,25 @@ fun GroupScreen(
                             },
                         ) {
                             Icon(
-                                if (destination == GroupDestination.SEARCH) {
-                                    Icons.Filled.Close
-                                } else {
-                                    Icons.AutoMirrored.Filled.ArrowBack
+                                when {
+                                    selectingExpenses -> Icons.Filled.Close
+                                    destination == GroupDestination.SEARCH -> Icons.Filled.Close
+                                    else -> Icons.AutoMirrored.Filled.ArrowBack
                                 },
-                                contentDescription = if (destination == GroupDestination.SEARCH) {
-                                    "Close search"
-                                } else {
-                                    "Back"
+                                contentDescription = when {
+                                    selectingExpenses -> "Stop selecting"
+                                    destination == GroupDestination.SEARCH -> "Close search"
+                                    else -> "Back"
                                 },
                             )
                         }
                     },
                     actions = {
-                        if (destination == GroupDestination.TABS && group != null) {
+                        if (selectingExpenses) {
+                            IconButton(onClick = { confirmDeleteExpenses = true }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete expenses")
+                            }
+                        } else if (destination == GroupDestination.TABS && group != null) {
                             // The search bar scrolls under the header, so the header carries a
                             // small search of its own once it does.
                             if (searchCollapsed && pagerState.currentPage == 0) {
@@ -560,7 +600,9 @@ fun GroupScreen(
                     // Grown and shrunk rather than added and removed: opening search must not
                     // move everything below the header in a single frame.
                     AnimatedVisibility(
-                        visible = destination == GroupDestination.TABS,
+                        // The tabs are for moving between pages; a selection is about the
+                        // page it was started on.
+                        visible = !selectingExpenses && destination == GroupDestination.TABS,
                         enter = expandVertically(SpliitMotion.spatialDefault()) +
                             fadeIn(SpliitMotion.effectsDefault()),
                         exit = shrinkVertically(SpliitMotion.spatialFast()) +
@@ -663,6 +705,7 @@ fun GroupScreen(
                                     when (page) {
                                         0 -> ExpenseListTab(
                                             model = model,
+                                            selection = expenseSelection,
                                             searchBarMorph = morph,
                                             onAdd = {
                                                 sheet = createPresentation(group, model, stored)
@@ -815,6 +858,43 @@ fun GroupScreen(
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { deleteGroupFailure = null }) { Text("OK") }
+            },
+        )
+    }
+
+    if (confirmDeleteExpenses) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteExpenses = false },
+            title = {
+                Text(
+                    if (expenseSelection.count == 1) {
+                        "Delete this expense?"
+                    } else {
+                        "Delete ${expenseSelection.count} expenses?"
+                    },
+                )
+            },
+            text = {
+                Text(
+                    if (expenseSelection.count == 1) {
+                        "It is removed from the group for everyone."
+                    } else {
+                        "They are removed from the group for everyone."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val ids = expenseSelection.ids
+                        expenseSelection.clear()
+                        confirmDeleteExpenses = false
+                        model.deleteExpenses(ids)
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteExpenses = false }) { Text("Cancel") }
             },
         )
     }

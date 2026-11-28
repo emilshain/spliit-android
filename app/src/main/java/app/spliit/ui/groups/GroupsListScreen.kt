@@ -13,6 +13,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -95,8 +96,6 @@ import app.spliit.domain.Failures
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
-import app.spliit.ui.theme.ExpressiveMenu
-import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.ExpressiveSwipe
 import app.spliit.ui.theme.SwipeAction
 import app.spliit.ui.theme.MenuPlacement
@@ -105,6 +104,8 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.PaletteTemplates
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
+import app.spliit.ui.theme.SelectionCheckboxSlot
+import app.spliit.ui.theme.SelectionState
 import app.spliit.ui.theme.stackedCardPadding
 import app.spliit.ui.theme.stackedCardShape
 import app.spliit.ui.theme.SpliitDimens
@@ -145,11 +146,50 @@ fun GroupsListScreen(
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var appearanceOpen by remember { mutableStateOf(false) }
+    // Long-press selection: while it is open the header holds the actions and a tap picks
+    // rather than opens, the way a file list on Drive behaves.
+    val selection = remember { SelectionState() }
     val themeChoice by container.appearance.theme.collectAsState(initial = ThemeChoice.System)
     val dynamicColor by container.appearance.dynamicColor.collectAsState(initial = true)
     val palette by container.appearance.palette.collectAsState(initial = AppearancePalette.Spliit)
 
     LaunchedEffect(model) { model.start() }
+
+    // A search and a selection are two different jobs for the same list; starting one ends the
+    // other, so the header never has to hold both.
+    LaunchedEffect(searching) { if (searching) selection.clear() }
+
+    // A group that has left the list cannot stay picked.
+    LaunchedEffect(model.groups, selection.ids) {
+        selection.retain(model.groups.mapTo(HashSet()) { it.groupId })
+    }
+
+    // Back leaves the selection before it leaves the screen.
+    BackHandler(enabled = selection.active) { selection.clear() }
+
+    fun starSelection() {
+        val chosen = model.groups.filter { it.groupId in selection.ids }
+        if (chosen.isEmpty()) return
+        // Every one becomes starred unless every one already is, so the action always does
+        // something rather than silently doing nothing to half the set.
+        val star = chosen.any { !it.isStarred }
+        selection.clear()
+        scope.launch { chosen.forEach { container.recentGroups.setStarred(star, it.groupId) } }
+    }
+
+    fun archiveSelection() {
+        val chosen = model.groups.filter { it.groupId in selection.ids }
+        if (chosen.isEmpty()) return
+        val archive = chosen.any { !it.isArchived }
+        selection.clear()
+        scope.launch { chosen.forEach { container.recentGroups.setArchived(archive, it.groupId) } }
+    }
+
+    fun removeSelection() {
+        val chosen = model.groups.filter { it.groupId in selection.ids }
+        selection.clear()
+        scope.launch { chosen.forEach { container.recentGroups.forget(it.groupId) } }
+    }
 
     // A start with nothing on disk reads in a frame or two, and drawing a splash for it would be
     // slower than the wait it hides. The mark appears only if the read is genuinely slow.
@@ -168,6 +208,15 @@ fun GroupsListScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // A selection takes the header off the page's own background: it is a mode
+                    // with actions in it now, not the app's name.
+                    .background(
+                        if (selection.active) {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        } else {
+                            Color.Transparent
+                        },
+                    )
                     .windowInsetsPadding(WindowInsets.statusBars),
             ) {
                 Row(
@@ -176,35 +225,83 @@ fun GroupsListScreen(
                         .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = "Spliit",
-                        style = SpliitType.Title,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = {
-                            searching = !searching
-                            if (!searching) query = ""
-                        },
-                    ) {
-                        Icon(
-                            imageVector = if (searching) {
-                                Icons.Filled.Close
+                    if (selection.active) {
+                        // The app's name and its settings are not things to do to a group, so
+                        // the selection replaces them with the things that are.
+                        IconButton(onClick = { selection.clear() }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Stop selecting",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        Text(
+                            text = if (selection.count == 1) {
+                                "1 selected"
                             } else {
-                                Icons.Filled.Search
+                                "${selection.count} selected"
                             },
-                            contentDescription = if (searching) "Close search" else "Search groups",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = SpliitType.Title,
+                            modifier = Modifier.weight(1f),
                         )
-                    }
-                    // Appearance lives beside search, both being things about the app rather
-                    // than about a group.
-                    IconButton(onClick = { appearanceOpen = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Appearance",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        IconButton(onClick = { starSelection() }) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = "Star or unstar",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = { archiveSelection() }) {
+                            Icon(
+                                Icons.Filled.Archive,
+                                contentDescription = "Archive or unarchive",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        // Removing only forgets this device's copy, which is why it is not in
+                        // the error colour: the group and its link stay on the server.
+                        IconButton(onClick = { removeSelection() }) {
+                            Icon(
+                                Icons.Filled.PlaylistRemove,
+                                contentDescription = "Remove from this phone",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Spliit",
+                            style = SpliitType.Title,
+                            modifier = Modifier.weight(1f),
                         )
+                        IconButton(
+                            onClick = {
+                                searching = !searching
+                                if (!searching) query = ""
+                            },
+                        ) {
+                            Icon(
+                                imageVector = if (searching) {
+                                    Icons.Filled.Close
+                                } else {
+                                    Icons.Filled.Search
+                                },
+                                contentDescription = if (searching) {
+                                    "Close search"
+                                } else {
+                                    "Search groups"
+                                },
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        // Appearance lives beside search, both being things about the app
+                        // rather than about a group.
+                        IconButton(onClick = { appearanceOpen = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Appearance",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
 
@@ -226,10 +323,13 @@ fun GroupsListScreen(
             }
         },
         floatingActionButton = {
-            AddGroupButton(
-                onCreate = { sheet = GroupsSheet.Create },
-                onAddByLink = { sheet = GroupsSheet.AddByLink },
-            )
+            // Adding is not one of the things a selection is for.
+            if (!selection.active) {
+                AddGroupButton(
+                    onCreate = { sheet = GroupsSheet.Create },
+                    onAddByLink = { sheet = GroupsSheet.AddByLink },
+                )
+            }
         },
     ) { padding ->
         val matches = remember(model.groups, query) {
@@ -282,7 +382,12 @@ fun GroupsListScreen(
                     onRefresh = { model.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    GroupsList(model = model, groups = matches, onOpenGroup = onOpenGroup)
+                    GroupsList(
+                        model = model,
+                        groups = matches,
+                        selection = selection,
+                        onOpenGroup = onOpenGroup,
+                    )
                 }
             }
         }
@@ -720,6 +825,7 @@ private data class FabAction(
 private fun GroupsList(
     model: GroupsListModel,
     groups: List<RecentGroup>,
+    selection: SelectionState,
     onOpenGroup: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -766,7 +872,14 @@ private fun GroupsList(
                     summary = model.summaries[group.groupId],
                     first = index == 0,
                     last = index == starred.lastIndex,
-                    onClick = { onOpenGroup(group.groupId) },
+                    selectionActive = selection.active,
+                    selected = group.groupId in selection,
+                    onClick = {
+                        if (selection.active) selection.toggle(group.groupId)
+                        else onOpenGroup(group.groupId)
+                    },
+                    onToggle = { selection.toggle(group.groupId) },
+                    onLongPress = { selection.start(group.groupId) },
                     onStar = { scope.launch { container.recentGroups.setStarred(!group.isStarred, group.groupId) } },
                     onArchive = { scope.launch { container.recentGroups.setArchived(!group.isArchived, group.groupId) } },
                     onRemove = { scope.launch { container.recentGroups.forget(group.groupId) } },
@@ -787,7 +900,14 @@ private fun GroupsList(
                     summary = model.summaries[group.groupId],
                     first = index == 0,
                     last = index == recent.lastIndex,
-                    onClick = { onOpenGroup(group.groupId) },
+                    selectionActive = selection.active,
+                    selected = group.groupId in selection,
+                    onClick = {
+                        if (selection.active) selection.toggle(group.groupId)
+                        else onOpenGroup(group.groupId)
+                    },
+                    onToggle = { selection.toggle(group.groupId) },
+                    onLongPress = { selection.start(group.groupId) },
                     onStar = { scope.launch { container.recentGroups.setStarred(!group.isStarred, group.groupId) } },
                     onArchive = { scope.launch { container.recentGroups.setArchived(!group.isArchived, group.groupId) } },
                     onRemove = { scope.launch { container.recentGroups.forget(group.groupId) } },
@@ -808,7 +928,14 @@ private fun GroupsList(
                     summary = model.summaries[group.groupId],
                     first = index == 0,
                     last = index == archived.lastIndex,
-                    onClick = { onOpenGroup(group.groupId) },
+                    selectionActive = selection.active,
+                    selected = group.groupId in selection,
+                    onClick = {
+                        if (selection.active) selection.toggle(group.groupId)
+                        else onOpenGroup(group.groupId)
+                    },
+                    onToggle = { selection.toggle(group.groupId) },
+                    onLongPress = { selection.start(group.groupId) },
                     onStar = { scope.launch { container.recentGroups.setStarred(!group.isStarred, group.groupId) } },
                     onArchive = { scope.launch { container.recentGroups.setArchived(!group.isArchived, group.groupId) } },
                     onRemove = { scope.launch { container.recentGroups.forget(group.groupId) } },
@@ -839,10 +966,10 @@ private fun SectionHeader(text: String) {
 /**
  * A group, and the three things that can be done to it.
  *
- * Star and archive sit on opposite edges because they are opposite acts; the same three actions
- * are in a long-press menu because a gesture nobody discovers is a feature nobody has. A full
- * swipe from the trailing edge archives rather than removes: removing is the one thing here
- * with no way back but the original link.
+ * Star and archive sit on opposite edges because they are opposite acts, and a full swipe from
+ * the trailing edge archives rather than removes: removing is the one thing here with no way back
+ * but the original link. A long press picks the group instead of opening a menu on it — the same
+ * three actions move up into the header, where they apply to everything selected at once.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -851,13 +978,16 @@ private fun GroupRow(
     summary: GroupSummary?,
     first: Boolean,
     last: Boolean,
+    selectionActive: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
+    onToggle: () -> Unit,
+    onLongPress: () -> Unit,
     onStar: () -> Unit,
     onArchive: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
 
     // Cards that touch are one group: the sides they share take the small corner and the sides
@@ -889,9 +1019,20 @@ private fun GroupRow(
             // A card rather than a bare row: the list is a set of things, and each one is
             // something you open.
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                // The card dips as a whole — surface, corners and content together — and
+                // settles back on the spring. Scaling only what is drawn inside left the card
+                // itself sitting still while its text shrank.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pressScale(interaction, pressedScale = 0.96f),
                 shape = shape,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                // A picked card steps up one surface tone: it is still the same card, and the
+                // checkbox is what says it is picked.
+                color = if (selected) {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
             ) {
                 Row(
                     modifier = Modifier
@@ -902,12 +1043,9 @@ private fun GroupRow(
                         .combinedClickable(
                             interactionSource = interaction,
                             indication = LocalIndication.current,
-                            onClick = onClick,
-                            onLongClick = { menuOpen = true },
+                            onClick = { if (selectionActive) onToggle() else onClick() },
+                            onLongClick = onLongPress,
                         )
-                        // The card dips under the finger and settles back on a spring, with no
-                        // ripple spreading across it.
-                        .pressScale(interaction, pressedScale = 0.98f)
                         .padding(
                             horizontal = SpliitDimens.RowPaddingHorizontal,
                             vertical = SpliitDimens.RowPaddingVertical,
@@ -915,6 +1053,9 @@ private fun GroupRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Only while selecting: the card otherwise keeps its full width for the name.
+                    SelectionCheckboxSlot(visible = selectionActive, selected = selected)
+
                     // Seeding on the ID rather than the name keeps a group's colour across a rename.
                     Monogram(
                         name = group.groupName,
@@ -945,37 +1086,6 @@ private fun GroupRow(
             }
         }
 
-        ExpressiveMenu(
-            expanded = menuOpen,
-            onDismissRequest = { menuOpen = false },
-        ) {
-            ExpressiveMenuItem(
-                text = if (group.isStarred) "Unstar" else "Star",
-                leadingIcon = Icons.Filled.Star,
-                onClick = {
-                    menuOpen = false
-                    onStar()
-                },
-            )
-            ExpressiveMenuItem(
-                text = if (group.isArchived) "Unarchive" else "Archive",
-                leadingIcon = Icons.Filled.Archive,
-                onClick = {
-                    menuOpen = false
-                    onArchive()
-                },
-            )
-            // Removing only forgets this copy: the group and its link stay on the server, which
-            // is why this is a playlist minus rather than a bin, and not in the error colour.
-            ExpressiveMenuItem(
-                text = "Remove",
-                leadingIcon = Icons.Filled.PlaylistRemove,
-                onClick = {
-                    menuOpen = false
-                    onRemove()
-                },
-            )
-        }
     }
 }
 

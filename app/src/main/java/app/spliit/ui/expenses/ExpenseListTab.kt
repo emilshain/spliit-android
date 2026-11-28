@@ -60,6 +60,7 @@ import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SelectionState
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.stackedCardShape
@@ -81,6 +82,8 @@ import kotlin.math.abs
 @Composable
 fun ExpenseListTab(
     model: GroupScreenModel,
+    /** Which expenses are picked out, when the pager's header has turned into actions. */
+    selection: SelectionState,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onSearch: () -> Unit,
@@ -210,8 +213,9 @@ fun ExpenseListTab(
                                 items = section.expenses,
                                 key = { _, expense -> expense.id },
                             ) { index, expense ->
-                                // Opening is the whole gesture here: deleting lives on the
-                                // expense itself, so the row is free to belong to the pager.
+                                // A tap opens the expense; a long press picks it, and from then
+                                // on a tap picks instead. Deleting alone lives on the expense's
+                                // own page; several at once is what the selection is for.
                                 val shape = stackedCardShape(
                                     first = index == 0,
                                     last = index == section.expenses.lastIndex,
@@ -235,13 +239,22 @@ fun ExpenseListTab(
                                         ),
                                 ) {
                                     ExpenseRow(
-                                        onClick = { onEdit(expense.id) },
+                                        onClick = {
+                                            if (selection.active) {
+                                                selection.toggle(expense.id)
+                                            } else {
+                                                onEdit(expense.id)
+                                            }
+                                        },
+                                        onLongClick = { selection.start(expense.id) },
                                         expense = expense,
                                         payerPosition = model.participantPosition(expense.paidBy.id),
                                         formatter = model.moneyFormatter,
                                         activeParticipantId = model.actorId,
                                         shape = shape,
                                         pending = model.isPending(expense.id),
+                                        selectionActive = selection.active,
+                                        selected = expense.id in selection,
                                     )
                                 }
                             }
@@ -266,6 +279,10 @@ fun ExpenseListTab(
         }
 
         val addInteraction = remember { MutableInteractionSource() }
+
+        // Adding and undoing belong to the list at rest; a selection replaces them with the
+        // actions in the header.
+        if (selection.active) return@Box
 
         FloatingActionButton(
             onClick = onAdd,

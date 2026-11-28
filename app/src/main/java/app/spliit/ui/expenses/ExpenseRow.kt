@@ -1,6 +1,9 @@
 package app.spliit.ui.expenses
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,6 +37,7 @@ import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.pressScale
+import app.spliit.ui.theme.SelectionCheckboxSlot
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import kotlin.math.abs
@@ -48,8 +53,10 @@ import kotlin.math.abs
  * in the list it came from — same columns, same money treatment, same category glyph.
  *
  * When [onClick] is given the card itself is the button: the ripple is the card's own, clipped to
- * its corners, rather than a full-width rectangle behind it.
+ * its corners, rather than a full-width rectangle behind it. When the list is selecting, the card
+ * picks instead of opening and grows a checkbox on the edge the thumb reached for.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExpenseRow(
     expense: ExpenseListItem,
@@ -60,7 +67,11 @@ fun ExpenseRow(
     shape: Shape = RoundedCornerShape(SpliitDimens.CardCorner),
     /** A change saved here that has not reached the server yet. */
     pending: Boolean = false,
+    /** A selection is open, so every card in the list shows its checkbox. */
+    selectionActive: Boolean = false,
+    selected: Boolean = false,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     /** Shared with the press animation, so the card dips while it is touched. */
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
@@ -76,6 +87,9 @@ fun ExpenseRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Only while selecting: the row otherwise keeps its full width for the expense.
+            SelectionCheckboxSlot(visible = selectionActive, selected = selected)
+
             CategoryGlyph(expense, payerPosition)
 
             Column(
@@ -161,26 +175,37 @@ fun ExpenseRow(
         // The gutter only: the gap to the row above is the list's, applied through
         // `stackedCardPadding`, so every stack in the app spaces its rows the same way.
         .padding(horizontal = SpliitDimens.ScreenGutter)
+        // The card dips as a whole — its surface, corners and all — rather than the content
+        // shrinking inside a card that stays put, which read as the text moving and not the row.
         .then(
-            if (onClick != null) Modifier.pressScale(interactionSource, pressedScale = 0.98f)
-            else Modifier,
+            if (onClick != null || onLongClick != null) {
+                Modifier.pressScale(interactionSource, pressedScale = 0.96f)
+            } else {
+                Modifier
+            },
         )
 
-    if (onClick != null) {
-        Surface(
-            onClick = onClick,
-            modifier = container,
-            shape = shape,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            interactionSource = interactionSource,
-        ) {
-            body()
-        }
-    } else {
-        Surface(
-            modifier = container,
-            shape = shape,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
+    Surface(
+        modifier = container,
+        shape = shape,
+        // A picked card steps up one surface tone rather than taking the accent: the row is
+        // still the same row, and the checkbox is what says it is picked.
+        color = if (selected) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(shape)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current,
+                    enabled = onClick != null || onLongClick != null,
+                    onClick = { onClick?.invoke() },
+                    onLongClick = onLongClick,
+                ),
         ) {
             body()
         }

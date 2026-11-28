@@ -1589,6 +1589,76 @@ class GroupScreenModel(
         }
     }
 
+    /**
+     * Deletes several expenses at once, for a list that is selecting.
+     *
+     * A selection has no undo window to hang a single row off, so the rows leave together and
+     * each delete is sent in turn. A row that could not be sent is kept in the outbox exactly as
+     * a single delete would be; a row the server refused comes back to the list and says why,
+     * because a bulk action that silently drops what it could not do is worse than none.
+     *
+     * A row that has never reached the server — a create still waiting in the outbox — is not
+     * deleted at all: the way to get rid of it is to forget the change, which is what this does.
+     */
+    fun deleteExpenses(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        val chosen = ids.toList()
+        val queued = pendingExpenses.filter { it.key in ids }
+        val removed = expenses.filter { it.id in ids }
+        val removedSearch = searchResults.filter { it.id in ids }
+
+        expenses = expenses.filterNot { it.id in ids }
+        searchResults = searchResults.filterNot { it.id in ids }
+        // A queued create is only a row here; the server has never seen it.
+        queued.forEach { container.outbox.remove(it) }
+        refreshPending()
+
+        scope.launch {
+            val current = client ?: return@launch
+            var failure: String? = null
+            val refused = mutableListOf<ExpenseListItem>()
+            for (item in removed) {
+                try {
+                    current.call(SpliitApi.deleteExpense(groupId, item.id, actorId))
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    if (isOfflineNetworkFailure(error)) {
+                        container.outbox.put(
+                            PendingExpense(
+                                key = item.id,
+                                groupId = groupId,
+                                kind = PendingExpense.Kind.DELETE,
+                                actorId = actorId,
+                                title = item.title,
+                                amount = item.amount,
+                                expenseDateEpochMillis = item.expenseDate.toEpochMilli(),
+                                queuedAtEpochMillis = System.currentTimeMillis(),
+                            ),
+                        )
+                        isOffline = true
+                    } else {
+                        refused += item
+                        if (failure == null) failure = Failures.message(error)
+                    }
+                }
+            }
+            if (refused.isNotEmpty()) {
+                val known = expenses.mapTo(HashSet()) { it.id }
+                expenses = (expenses + refused.filterNot { it.id in known }).sortedByDescending {
+                    it.expenseDate
+                }
+                val knownInSearch = searchResults.mapTo(HashSet()) { it.id }
+                searchResults = (searchResults + removedSearch.filter {
+                    it.id in refused.map { refusedRow -> refusedRow.id }
+                }.filterNot { it.id in knownInSearch })
+            }
+            refreshPending()
+            failure?.let { expensesFailure = it }
+            reloadAfterExpenseChangeNow()
+        }
+    }
+
     /** Closes the window on the way out of the screen. */
     fun flushPendingDeletion() {
         val pending = pendingDeletion ?: return
