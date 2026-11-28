@@ -37,7 +37,7 @@ import app.spliit.ui.theme.LocalSpliitColors
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.pressScale
-import app.spliit.ui.theme.SelectionCheckboxSlot
+import app.spliit.ui.theme.SelectionCircleSlot
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import kotlin.math.abs
@@ -87,9 +87,6 @@ fun ExpenseRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Only while selecting: the row otherwise keeps its full width for the expense.
-            SelectionCheckboxSlot(visible = selectionActive, selected = selected)
-
             CategoryGlyph(expense, payerPosition)
 
             Column(
@@ -167,6 +164,10 @@ fun ExpenseRow(
                     Money(value = formatter.string(abs(balance)))
                 }
             }
+
+            // The pick sits on the trailing edge, where the row's own arrow would be: it is the
+            // last thing read, after what the expense is and what it costs.
+            SelectionCircleSlot(visible = selectionActive, selected = selected)
         }
     }
 
@@ -188,10 +189,11 @@ fun ExpenseRow(
     Surface(
         modifier = container,
         shape = shape,
-        // A picked card steps up one surface tone rather than taking the accent: the row is
-        // still the same row, and the checkbox is what says it is picked.
+        // A picked card takes the selection role, not a neighbouring tone of the card's own
+        // colour: a stepped surface reads as a slightly different card, a container reads as
+        // picked.
         color = if (selected) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
+            MaterialTheme.colorScheme.secondaryContainer
         } else {
             MaterialTheme.colorScheme.surfaceContainerLow
         },

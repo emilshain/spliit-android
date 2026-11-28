@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.UploadFile
@@ -161,6 +162,8 @@ private enum class GroupPage { MAIN, SETTINGS, DETAIL, SETTLEMENTS }
 fun GroupScreen(
     container: AppContainer,
     groupId: String,
+    /** Opened straight onto the group's settings, for an edit from the home list. */
+    openSettings: Boolean = false,
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -168,7 +171,9 @@ fun GroupScreen(
     // One pager for the four tabs: tapping and swiping move the same state, so the pill has one
     // position to follow rather than two that could disagree.
     val pagerState = rememberPagerState(pageCount = { GroupTabs.size })
-    var destination by remember { mutableStateOf(GroupDestination.TABS) }
+    var destination by remember {
+        mutableStateOf(if (openSettings) GroupDestination.SETTINGS else GroupDestination.TABS)
+    }
     var query by remember { mutableStateOf("") }
     var sheet by remember { mutableStateOf<ExpenseFormPresentation?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
@@ -193,6 +198,9 @@ fun GroupScreen(
     var confirmDeleteExpenses by remember { mutableStateOf(false) }
     val selectingExpenses =
         expenseSelection.active && destination == GroupDestination.TABS && pagerState.currentPage == 0
+
+    /** The expenses the list is showing, so "select all" picks what is actually there. */
+    var visibleExpenseIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Import and export used to live on the settings screen; they are things done to the group,
     // so they belong in the group's own menu. The state sits here for the same reason.
@@ -364,6 +372,24 @@ fun GroupScreen(
         loadDetail(id)
     }
 
+    /**
+     * Opens the form on one selected expense, for the header's edit action: the same form the
+     * expense's own page opens, so editing from a selection and editing from the row land in
+     * the same place.
+     */
+    fun editExpense(id: String) {
+        expenseSelection.clear()
+        scope.launch {
+            val expense = model.expense(id) ?: return@launch
+            val current = group ?: return@launch
+            sheet = ExpenseFormPresentation(
+                draft = ExpenseFormDraft.editing(expense, current),
+                editing = expense,
+                mintedId = expense.id,
+            )
+        }
+    }
+
     // The tabs and the search page are one page here: search grows out of the search bar
     // rather than arriving as a new screen. Settings, an expense and the settlements are pages
     // of their own, and push in from the trailing edge the way a stack does in SwiftUI.
@@ -439,13 +465,7 @@ fun GroupScreen(
                 Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
                 CenterAlignedTopAppBar(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    // A selection takes the bar off the page's own background: it is a mode with
-                    // actions in it now, not the group's title.
-                    containerColor = if (selectingExpenses) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        MaterialTheme.colorScheme.background
-                    },
+                    containerColor = MaterialTheme.colorScheme.background,
                 ),
                     title = {
                         if (selectingExpenses) {
@@ -513,6 +533,25 @@ fun GroupScreen(
                     },
                     actions = {
                         if (selectingExpenses) {
+                            // Edit is a one-at-a-time action, so it is only there for one row.
+                            if (expenseSelection.count == 1) {
+                                IconButton(
+                                    onClick = { expenseSelection.ids.firstOrNull()?.let(::editExpense) },
+                                ) {
+                                    Icon(Icons.Filled.Edit, contentDescription = "Edit expense")
+                                }
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (expenseSelection.containsAll(visibleExpenseIds)) {
+                                        expenseSelection.clear()
+                                    } else {
+                                        expenseSelection.selectAll(visibleExpenseIds)
+                                    }
+                                },
+                            ) {
+                                Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
+                            }
                             IconButton(onClick = { confirmDeleteExpenses = true }) {
                                 Icon(Icons.Filled.Delete, contentDescription = "Delete expenses")
                             }
@@ -706,6 +745,7 @@ fun GroupScreen(
                                         0 -> ExpenseListTab(
                                             model = model,
                                             selection = expenseSelection,
+                                            onVisibleExpenses = { visibleExpenseIds = it },
                                             searchBarMorph = morph,
                                             onAdd = {
                                                 sheet = createPresentation(group, model, stored)

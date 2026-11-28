@@ -29,7 +29,7 @@ import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitTheme
 
 private const val GROUPS = "groups"
-private const val GROUP_DETAIL = "group/{groupId}"
+private const val GROUP_DETAIL = "group/{groupId}?settings={settings}"
 
 @Composable
 fun SpliitApp(container: AppContainer) {
@@ -82,16 +82,28 @@ fun SpliitApp(container: AppContainer) {
                         // expansion of the row.
                         navController.navigate("group/${Uri.encode(groupId)}")
                     },
+                    // Editing a group from the home list opens the group on its settings page:
+                    // what a group is gets changed where the rest of it lives.
+                    onEditGroup = { groupId ->
+                        navController.navigate("group/${Uri.encode(groupId)}?settings=true")
+                    },
                 )
             }
 
             composable(
                 route = GROUP_DETAIL,
-                arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
+                arguments = listOf(
+                    navArgument("groupId") { type = NavType.StringType },
+                    navArgument("settings") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
+                ),
             ) { entry ->
                 GroupScreen(
                     container = container,
                     groupId = entry.arguments?.getString("groupId").orEmpty(),
+                    openSettings = entry.arguments?.getBoolean("settings") == true,
                     onBack = { navController.popBackStack() },
                 )
             }

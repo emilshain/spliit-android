@@ -1,5 +1,10 @@
 package app.spliit.ui.expenses
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -84,6 +89,8 @@ fun ExpenseListTab(
     model: GroupScreenModel,
     /** Which expenses are picked out, when the pager's header has turned into actions. */
     selection: SelectionState,
+    /** The rows on screen, so the header's "select all" picks what is visible. */
+    onVisibleExpenses: (List<String>) -> Unit = {},
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onSearch: () -> Unit,
@@ -120,6 +127,13 @@ fun ExpenseListTab(
             else -> {
                 val sections = filtered(model.sections, payerFilter)
                 val filterName = participants.firstOrNull { it.id == payerFilter }?.name
+
+                // What "select all" may pick: the rows this tab is showing, filter included.
+                LaunchedEffect(sections) {
+                    onVisibleExpenses(
+                        sections.flatMap { section -> section.expenses.map { it.id } },
+                    )
+                }
 
                 // A filter is a question about the whole group, so while one is on the pages
                 // behind the list are fetched without waiting to be scrolled to.
@@ -280,22 +294,29 @@ fun ExpenseListTab(
 
         val addInteraction = remember { MutableInteractionSource() }
 
-        // Adding and undoing belong to the list at rest; a selection replaces them with the
-        // actions in the header.
-        if (selection.active) return@Box
-
-        FloatingActionButton(
-            onClick = onAdd,
+        // Adding belongs to the list at rest; a selection replaces it with the actions in the
+        // header. The button leaves downwards and comes back the same way, on the theme's own
+        // springs, rather than appearing and disappearing between frames.
+        AnimatedVisibility(
+            visible = !selection.active,
+            enter = slideInVertically(SpliitMotion.spatialDefault()) { height -> height } +
+                fadeIn(SpliitMotion.effectsDefault()),
+            exit = slideOutVertically(SpliitMotion.spatialFast()) { height -> height } +
+                fadeOut(SpliitMotion.effectsFast()),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 24.dp)
-                .pressScale(addInteraction),
-            interactionSource = addInteraction,
-            shape = RoundedCornerShape(SpliitDimens.FabCorner),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+                .padding(end = 20.dp, bottom = 24.dp),
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Add expense")
+            FloatingActionButton(
+                onClick = onAdd,
+                modifier = Modifier.pressScale(addInteraction),
+                interactionSource = addInteraction,
+                shape = RoundedCornerShape(SpliitDimens.FabCorner),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Add expense")
+            }
         }
 
         ExpenseUndoBar(

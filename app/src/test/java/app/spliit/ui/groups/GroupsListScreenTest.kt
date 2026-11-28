@@ -31,7 +31,7 @@ class GroupsListScreenTest {
 
         compose.setContent {
             SpliitTheme {
-                GroupsListScreen(container = container, onOpenGroup = {})
+                GroupsListScreen(container = container, onOpenGroup = {}, onEditGroup = {})
             }
         }
 
@@ -54,7 +54,7 @@ class GroupsListScreenTest {
 
         compose.setContent {
             SpliitTheme {
-                GroupsListScreen(container = container, onOpenGroup = {})
+                GroupsListScreen(container = container, onOpenGroup = {}, onEditGroup = {})
             }
         }
 

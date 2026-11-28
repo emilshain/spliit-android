@@ -1,6 +1,7 @@
 package app.spliit.ui.groups
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,6 +11,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,9 +45,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlaylistRemove
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -96,6 +103,8 @@ import app.spliit.domain.Failures
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
+import app.spliit.ui.theme.ExpressiveMenu
+import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.ExpressiveSwipe
 import app.spliit.ui.theme.SwipeAction
 import app.spliit.ui.theme.MenuPlacement
@@ -104,7 +113,7 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.PaletteTemplates
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
-import app.spliit.ui.theme.SelectionCheckboxSlot
+import app.spliit.ui.theme.SelectionCircle
 import app.spliit.ui.theme.SelectionState
 import app.spliit.ui.theme.stackedCardPadding
 import app.spliit.ui.theme.stackedCardShape
@@ -139,6 +148,8 @@ import kotlinx.coroutines.launch
 fun GroupsListScreen(
     container: AppContainer,
     onOpenGroup: (String) -> Unit,
+    /** Opens a group on its settings page, for the edit action of a one-row selection. */
+    onEditGroup: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val model = remember(container) { GroupsListModel(container, scope) }
@@ -146,6 +157,7 @@ fun GroupsListScreen(
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var appearanceOpen by remember { mutableStateOf(false) }
+    var selectionMenuOpen by remember { mutableStateOf(false) }
     // Long-press selection: while it is open the header holds the actions and a tap picks
     // rather than opens, the way a file list on Drive behaves.
     val selection = remember { SelectionState() }
@@ -200,6 +212,17 @@ fun GroupsListScreen(
         slowStart = true
     }
 
+    // What the list is showing: the remembered groups, narrowed by the search field when one is
+    // open. The header needs it for "select all", so it is worked out above the bars.
+    val matches = remember(model.groups, query) {
+        val needle = query.trim()
+        if (needle.isEmpty()) {
+            model.groups
+        } else {
+            model.groups.filter { it.groupName.contains(needle, ignoreCase = true) }
+        }
+    }
+
     Scaffold(
         topBar = {
             // The app's own name, once: the list below is plainly the groups, and a heading
@@ -208,21 +231,20 @@ fun GroupsListScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // A selection takes the header off the page's own background: it is a mode
-                    // with actions in it now, not the app's name.
-                    .background(
-                        if (selection.active) {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        } else {
-                            Color.Transparent
-                        },
-                    )
                     .windowInsetsPadding(WindowInsets.statusBars),
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+                        // Selecting starts at the icon rather than at the page gutter, so the
+                        // close button sits where the thumb reaches and nothing is left blank
+                        // to its left.
+                        .padding(
+                            start = if (selection.active) 4.dp else 20.dp,
+                            end = if (selection.active) 0.dp else 12.dp,
+                            top = 8.dp,
+                            bottom = 4.dp,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (selection.active) {
@@ -235,15 +257,51 @@ fun GroupsListScreen(
                                 tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }
+                        // Row-sized rather than the page title's size: the bar has to hold the
+                        // count and up to four actions on a phone.
                         Text(
                             text = if (selection.count == 1) {
                                 "1 selected"
                             } else {
                                 "${selection.count} selected"
                             },
-                            style = SpliitType.Title,
+                            style = SpliitType.RowTitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
+                        // Editing changes one group, so it is only offered for one.
+                        if (selection.count == 1) {
+                            IconButton(
+                                onClick = {
+                                    val id = selection.ids.firstOrNull() ?: return@IconButton
+                                    selection.clear()
+                                    onEditGroup(id)
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Edit group",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                val present = matches.map { it.groupId }
+                                if (selection.containsAll(present)) {
+                                    selection.clear()
+                                } else {
+                                    selection.selectAll(present)
+                                }
+                            },
+                        ) {
+                            Icon(
+                                Icons.Filled.SelectAll,
+                                contentDescription = "Select all",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         IconButton(onClick = { starSelection() }) {
                             Icon(
                                 Icons.Filled.Star,
@@ -259,13 +317,30 @@ fun GroupsListScreen(
                             )
                         }
                         // Removing only forgets this device's copy, which is why it is not in
-                        // the error colour: the group and its link stay on the server.
-                        IconButton(onClick = { removeSelection() }) {
-                            Icon(
-                                Icons.Filled.PlaylistRemove,
-                                contentDescription = "Remove from this phone",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        // the error colour: the group and its link stay on the server. It is
+                        // also the one action with no way back here, so it sits in the menu
+                        // rather than beside the two that have one.
+                        Box {
+                            IconButton(onClick = { selectionMenuOpen = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = "More actions",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            ExpressiveMenu(
+                                expanded = selectionMenuOpen,
+                                onDismissRequest = { selectionMenuOpen = false },
+                            ) {
+                                ExpressiveMenuItem(
+                                    text = "Remove from this phone",
+                                    leadingIcon = Icons.Filled.PlaylistRemove,
+                                    onClick = {
+                                        selectionMenuOpen = false
+                                        removeSelection()
+                                    },
+                                )
+                            }
                         }
                     } else {
                         Text(
@@ -323,8 +398,15 @@ fun GroupsListScreen(
             }
         },
         floatingActionButton = {
-            // Adding is not one of the things a selection is for.
-            if (!selection.active) {
+            // Adding is not one of the things a selection is for, so the button leaves the way
+            // it arrived — downwards, on the spring, rather than vanishing.
+            AnimatedVisibility(
+                visible = !selection.active,
+                enter = slideInVertically(SpliitMotion.spatialDefault()) { height -> height } +
+                    fadeIn(SpliitMotion.effectsDefault()),
+                exit = slideOutVertically(SpliitMotion.spatialFast()) { height -> height } +
+                    fadeOut(SpliitMotion.effectsFast()),
+            ) {
                 AddGroupButton(
                     onCreate = { sheet = GroupsSheet.Create },
                     onAddByLink = { sheet = GroupsSheet.AddByLink },
@@ -332,15 +414,6 @@ fun GroupsListScreen(
             }
         },
     ) { padding ->
-        val matches = remember(model.groups, query) {
-            val needle = query.trim()
-            if (needle.isEmpty()) {
-                model.groups
-            } else {
-                model.groups.filter { it.groupName.contains(needle, ignoreCase = true) }
-            }
-        }
-
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (!model.hasLoadedGroups) {
                 StartupMark(visible = slowStart)
@@ -1026,10 +1099,11 @@ private fun GroupRow(
                     .fillMaxWidth()
                     .pressScale(interaction, pressedScale = 0.96f),
                 shape = shape,
-                // A picked card steps up one surface tone: it is still the same card, and the
-                // checkbox is what says it is picked.
+                // A picked card takes the selection role, not a neighbouring tone of the card's
+                // own colour: a stepped surface reads as a slightly different card, a container
+                // reads as picked.
                 color = if (selected) {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
+                    MaterialTheme.colorScheme.secondaryContainer
                 } else {
                     MaterialTheme.colorScheme.surfaceContainerLow
                 },
@@ -1053,9 +1127,6 @@ private fun GroupRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Only while selecting: the card otherwise keeps its full width for the name.
-                    SelectionCheckboxSlot(visible = selectionActive, selected = selected)
-
                     // Seeding on the ID rather than the name keeps a group's colour across a rename.
                     Monogram(
                         name = group.groupName,
@@ -1076,12 +1147,28 @@ private fun GroupRow(
                         GroupMeta(summary)
                     }
 
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // The trailing slot says what a tap would do: open the group, or pick it.
+                    // The circle takes the chevron's place rather than sitting beside it, so the
+                    // row's own width does not change when a selection opens.
+                    AnimatedContent(
+                        targetState = selectionActive,
+                        transitionSpec = {
+                            fadeIn(SpliitMotion.effectsFast()) togetherWith
+                                fadeOut(SpliitMotion.effectsFast())
+                        },
+                        label = "group trailing",
+                    ) { selecting ->
+                        if (selecting) {
+                            SelectionCircle(selected)
+                        } else {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }
