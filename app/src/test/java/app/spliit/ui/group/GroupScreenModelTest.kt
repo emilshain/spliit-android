@@ -1,5 +1,7 @@
 package app.spliit.ui.group
 
+import app.spliit.AppContainer
+import app.spliit.data.local.PendingExpense
 import app.spliit.ui.FakeSpliitServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -213,11 +215,71 @@ class GroupScreenModelTest {
         assertTrue(model.hasMoreExpenses)
     }
 
+    // MARK: - Deleting while offline
+
+    /**
+     * A delete of a row that only exists in the outbox is this phone forgetting it. Sending a
+     * delete would ask the server to remove an expense it has never had, so the request would
+     * fail and the waiting create would stay where it was.
+     */
+    @Test
+    fun `deleting a waiting expense forgets it instead of deleting it on the server`() = runBlocking {
+        val server = server()
+        // Nothing can be sent, so the create stays in the outbox and the row is drawn from it.
+        server.offline("groups.expenses.create")
+        val container = server.container()
+        container.outbox.put(pendingCreate("w1", "Taxi"))
+
+        val model = startedModel(server, container)
+        await { model.sections.flatMap { it.expenses }.any { it.id == "w1" } }
+
+        model.requestDelete(model.sections.flatMap { it.expenses }.first { it.id == "w1" })
+        model.commitPendingDeletion()
+
+        withTimeout(5_000) {
+            while (container.outbox.forGroup("g1").isNotEmpty()) delay(10)
+        }
+        assertEquals(0, server.callsTo("groups.expenses.delete"))
+    }
+
+    /**
+     * A search can find an expense the list has not loaded, and undo has to put it back where it
+     * came from: the results, not a list that never held it.
+     */
+    @Test
+    fun `undo after deleting a search result leaves the expense list alone`() = runBlocking {
+        val server = server()
+        server.answerMatching("groups.expenses.list") { request ->
+            val input = request.url.queryParameter("input").orEmpty()
+            if (input.contains("\"filter\":\"Dinner\"")) {
+                """{"expenses":[${expense("e-far", "Dinner", 3000, null, null)}],
+                   "hasMore":false,"nextCursor":0}"""
+            } else {
+                """{"expenses":[${expense("e-rent", "Rent", 90000, null, null)}],
+                   "hasMore":false,"nextCursor":0}"""
+            }
+        }
+
+        val model = startedModel(server)
+        await { model.expenses.size == 1 }
+        model.search("Dinner")
+        await { model.searchResults.size == 1 }
+
+        model.requestDelete(model.searchResults.single())
+        model.undoDelete()
+
+        assertEquals(listOf("Rent"), model.expenses.map { it.title })
+        assertEquals(listOf("Dinner"), model.searchResults.map { it.title })
+    }
+
     // MARK: - Helpers
 
-    private suspend fun CoroutineScope.startedModel(server: FakeSpliitServer): GroupScreenModel {
+    private suspend fun CoroutineScope.startedModel(
+        server: FakeSpliitServer,
+        container: AppContainer = server.container(),
+    ): GroupScreenModel {
         val model = GroupScreenModel(
-            container = server.container(),
+            container = container,
             groupId = "g1",
             scope = this,
             searchDebounceMillis = 40,
@@ -226,6 +288,24 @@ class GroupScreenModelTest {
         await { model.group != null }
         return model
     }
+
+    /**
+     * A change that could not be sent, as the outbox holds it.
+     *
+     * It carries the request it would send, as a real one does: without it the model would drop
+     * the row as unusable rather than try to send it, which is a different path.
+     */
+    private fun pendingCreate(id: String, title: String) = PendingExpense(
+        key = id,
+        groupId = "g1",
+        kind = PendingExpense.Kind.CREATE,
+        valuesJson = """{"title":"$title","amount":1000}""",
+        title = title,
+        amount = 1000,
+        paidById = "p1",
+        paidFor = listOf(PendingExpense.PaidFor("p1", 10000)),
+        queuedAtEpochMillis = System.currentTimeMillis(),
+    )
 
     private suspend fun await(condition: () -> Boolean) {
         withTimeout(5_000) {

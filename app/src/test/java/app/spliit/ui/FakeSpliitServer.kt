@@ -15,6 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import java.io.IOException
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -33,6 +34,7 @@ class FakeSpliitServer : Interceptor {
     private val answers = ConcurrentHashMap<String, String>()
     private val handlers = ConcurrentHashMap<String, (Request) -> String?>()
     private val failures = ConcurrentHashMap<String, Int>()
+    private val unreachable = Collections.synchronizedSet(mutableSetOf<String>())
     private val recorded = Collections.synchronizedList(mutableListOf<Call>())
 
     /** Answers `procedure` (e.g. `groups.list`) with [payload], wrapped in the superjson envelope. */
@@ -56,6 +58,14 @@ class FakeSpliitServer : Interceptor {
         failures[procedure] = status
     }
 
+    /**
+     * Makes `procedure` unreachable rather than refused: the call fails with the IO error a phone
+     * with no signal produces, which is what the app's offline paths are written against.
+     */
+    fun offline(procedure: String) {
+        unreachable += procedure
+    }
+
     /** Every procedure called, in order. */
     fun calls(): List<String> = recorded.map { it.procedure }
 
@@ -77,6 +87,8 @@ class FakeSpliitServer : Interceptor {
             body = request.body?.let { body -> Buffer().also { body.writeTo(it) }.readUtf8() },
             url = request.url.toString(),
         )
+
+        if (procedure in unreachable) throw IOException("Failed to connect to $procedure")
 
         val failedStatus = failures[procedure]
         val body = if (failedStatus != null) {

@@ -1495,8 +1495,14 @@ class GroupScreenModel(
     /** An expense that has left the screen but not yet the server. */
     data class PendingDeletion(
         val expense: ExpenseListItem,
-        /** Where the row was, so undo puts it back where it was rather than at the top. */
-        val index: Int,
+        /**
+         * Where the row was, so undo puts it back where it was rather than at the top.
+         *
+         * Null when the row was not in the list at all — a search result is the case that
+         * matters: putting it back here would add an expense to the list that the list never
+         * had, under a search's name.
+         */
+        val index: Int?,
         /** Where the row was in the results, when the delete came from the search screen. */
         val searchIndex: Int?,
         /** Who the activity log should credit, captured when the row was swiped. */
@@ -1520,7 +1526,7 @@ class GroupScreenModel(
         commitPendingDeletion()
         pendingDeletion = PendingDeletion(
             expense = expense,
-            index = expenses.indexOfFirst { it.id == expense.id }.coerceAtLeast(0),
+            index = expenses.indexOfFirst { it.id == expense.id }.takeIf { it >= 0 },
             searchIndex = searchResults.indexOfFirst { it.id == expense.id }.takeIf { it >= 0 },
             actorId = actorId,
         )
@@ -1556,8 +1562,13 @@ class GroupScreenModel(
         val pending = pendingDeletion ?: return
         pendingDeletion = null
 
-        val index = pending.index.coerceAtMost(expenses.size)
-        expenses = expenses.toMutableList().apply { add(index, pending.expense) }
+        // Back where it was, and only there: a row that came from the results goes back into
+        // the results.
+        pending.index?.let { was ->
+            expenses = expenses.toMutableList().apply {
+                add(was.coerceAtMost(size), pending.expense)
+            }
+        }
 
         val searchIndex = pending.searchIndex
         if (searchIndex != null && searchIndex <= searchResults.size) {
@@ -1575,6 +1586,16 @@ class GroupScreenModel(
         pendingDeletion = null
 
         scope.launch {
+            // A change still waiting has never reached the server, so there is nothing there to
+            // delete: the delete is this phone forgetting it, and sending one would leave the
+            // create in the outbox instead.
+            val waiting = container.outbox.forGroup(groupId)
+                .firstOrNull { it.key == pending.expense.id }
+            if (waiting?.kind == PendingExpense.Kind.CREATE) {
+                container.outbox.remove(waiting)
+                refreshPending()
+                return@launch
+            }
             val current = client ?: return@launch
             try {
                 current.call(SpliitApi.deleteExpense(groupId, pending.expense.id, pending.actorId))
@@ -1602,8 +1623,11 @@ class GroupScreenModel(
                     return@launch
                 }
                 // The server still has it, so the screen should too.
-                val index = pending.index.coerceAtMost(expenses.size)
-                expenses = expenses.toMutableList().apply { add(index, pending.expense) }
+                pending.index?.let { was ->
+                    expenses = expenses.toMutableList().apply {
+                        add(was.coerceAtMost(size), pending.expense)
+                    }
+                }
                 val searchIndex = pending.searchIndex
                 if (searchIndex != null && searchIndex <= searchResults.size) {
                     searchResults = searchResults.toMutableList().apply {

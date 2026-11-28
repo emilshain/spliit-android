@@ -228,15 +228,20 @@ fun ExpenseFormSheet(
      */
     suspend fun queue(values: app.spliit.data.remote.ExpenseFormValues) {
         val category = categories.firstOrNull { it.id == values.category }
+        // What is waiting decides what this is. An edit to an expense the server has never seen
+        // is still a create: written as an update it would ask the server to change something
+        // it does not have, and the waiting create would be replaced by a request that fails.
+        val waiting = container.outbox.forGroup(group.id).firstOrNull { it.key == expenseId }
+        val kind = when {
+            editing == null -> PendingExpense.Kind.CREATE
+            waiting?.kind == PendingExpense.Kind.CREATE -> PendingExpense.Kind.CREATE
+            else -> PendingExpense.Kind.UPDATE
+        }
         container.outbox.put(
             PendingExpense(
                 key = expenseId,
                 groupId = group.id,
-                kind = if (editing == null) {
-                    PendingExpense.Kind.CREATE
-                } else {
-                    PendingExpense.Kind.UPDATE
-                },
+                kind = kind,
                 valuesJson = values.toJson().toString(),
                 actorId = actorId,
                 title = values.title,

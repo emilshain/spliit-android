@@ -5,7 +5,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import app.spliit.AppContainer
+import app.spliit.data.local.PendingExpense
 import app.spliit.data.local.RecentGroup
+import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.Group
 import app.spliit.data.model.Participant
 import app.spliit.data.model.SplitMode
@@ -14,6 +17,8 @@ import app.spliit.domain.ParticipantShare
 import app.spliit.ui.FakeSpliitServer
 import app.spliit.ui.seedGroups
 import app.spliit.ui.theme.SpliitTheme
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -151,8 +156,9 @@ class ExpenseFormSheetTest {
         server: FakeSpliitServer,
         draft: ExpenseFormDraft,
         onSaved: () -> Unit,
+        editing: ExpenseDetails? = null,
+        container: AppContainer = server.container(),
     ) {
-        val container = server.container()
         seedGroups(
             container.recentGroups,
             RecentGroup(groupId = "g1", groupName = "Flat", instanceURL = "https://spliit.app"),
@@ -163,7 +169,7 @@ class ExpenseFormSheetTest {
                 ExpenseFormSheet(
                     container = container,
                     group = group,
-                    editing = null,
+                    editing = editing,
                     initialDraft = draft,
                     mintedExpenseId = "exp-1",
                     categories = emptyList(),
@@ -178,6 +184,61 @@ class ExpenseFormSheetTest {
         compose.waitUntil(TIMEOUT) {
             compose.onAllNodesWithText("Save").fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    /**
+     * The outbox is the only record of a change the server has not accepted, so an edit made
+     * offline has to leave it as it found it: a waiting create stays a create, carrying the new
+     * values, rather than becoming an update for an expense the server has never heard of.
+     */
+    @Test
+    fun anEditMadeOfflineToAWaitingExpense_staysACreate() {
+        val server = FakeSpliitServer()
+        server.offline("groups.expenses.update")
+        val container = server.container()
+        runBlocking {
+            container.outbox.put(
+                PendingExpense(
+                    key = "w1",
+                    groupId = group.id,
+                    kind = PendingExpense.Kind.CREATE,
+                    title = "Taxi",
+                    amount = 1000,
+                    paidById = "p1",
+                    paidFor = listOf(PendingExpense.PaidFor("p1", 10000)),
+                ),
+            )
+        }
+
+        var saved = false
+        show(
+            server = server,
+            container = container,
+            editing = ExpenseDetails(
+                id = "w1",
+                groupId = group.id,
+                title = "Taxi",
+                amount = 1000,
+                categoryId = 0,
+                expenseDate = Instant.parse("2026-08-13T00:00:00Z"),
+                createdAt = Instant.parse("2026-08-13T09:00:00Z"),
+                paidById = "p1",
+                paidBy = Participant("p1", "Ana"),
+                isReimbursement = false,
+                splitMode = SplitMode.EVENLY,
+            ),
+            draft = ExpenseFormDraft.creatingIn(group)
+                .copy(title = "Taxi to the airport", amountText = "12.00"),
+            onSaved = { saved = true },
+        )
+
+        compose.onNodeWithText("Save").performClick()
+        compose.waitUntil(TIMEOUT) { saved }
+
+        val waiting = runBlocking { container.outbox.forGroup(group.id) }.single()
+        assertEquals(PendingExpense.Kind.CREATE, waiting.kind)
+        assertEquals("Taxi to the airport", waiting.title)
+        assertEquals(1200, waiting.amount)
     }
 
     private companion object {
