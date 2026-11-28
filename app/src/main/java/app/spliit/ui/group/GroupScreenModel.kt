@@ -27,6 +27,7 @@ import app.spliit.data.remote.TrpcServerException
 import app.spliit.data.remote.groupStats
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.DateHeading
+import app.spliit.domain.Failures
 import app.spliit.domain.CategorySpending
 import app.spliit.domain.ExpenseShares
 import app.spliit.domain.GroupExport
@@ -447,7 +448,7 @@ class GroupScreenModel(
                 throw error
             } catch (error: TrpcServerException) {
                 container.outbox.remove(pending)
-                expensesFailure = error.localizedMessage
+                expensesFailure = Failures.message(error)
             } catch (error: Exception) {
                 break
             }
@@ -686,7 +687,7 @@ class GroupScreenModel(
                 throw error
             } catch (error: Exception) {
                 failed++
-                if (firstFailure == null) firstFailure = error.localizedMessage
+                if (firstFailure == null) firstFailure = Failures.message(error)
             }
             onProgress(index + 1)
         }
@@ -766,7 +767,7 @@ class GroupScreenModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            groupFailure = error.localizedMessage
+            groupFailure = Failures.message(error)
             if (group != null && isOfflineNetworkFailure(error)) isOffline = true
         }
     }
@@ -782,7 +783,7 @@ class GroupScreenModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            expensesFailure = error.localizedMessage
+            expensesFailure = Failures.message(error)
             didLoadExpenses = true
             if (expenses.isNotEmpty() && isOfflineNetworkFailure(error)) isOffline = true
         }
@@ -829,7 +830,7 @@ class GroupScreenModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            balancesFailure = error.localizedMessage
+            balancesFailure = Failures.message(error)
             didLoadBalances = true
         }
     }
@@ -930,7 +931,7 @@ class GroupScreenModel(
             // answer the server refused, or the tab would show a number it cannot vouch for.
             if (statsParticipantId == participantId && statsAreLocal) stats = null
             if (!error.isUnknownProcedure) {
-                if (statsParticipantId == participantId) statsFailure = error.localizedMessage
+                if (statsParticipantId == participantId) statsFailure = Failures.message(error)
                 return
             }
             if (statsParticipantId != participantId) return
@@ -944,7 +945,7 @@ class GroupScreenModel(
                     statsFailure = null
                 } else {
                     if (statsAreLocal) stats = null
-                    statsFailure = error.localizedMessage
+                    statsFailure = Failures.message(error)
                 }
             }
         } finally {
@@ -1171,7 +1172,7 @@ class GroupScreenModel(
                 didLoadCategorySpending = true
                 categorySpendingFailure = null
             } else {
-                categorySpendingFailure = error.localizedMessage
+                categorySpendingFailure = Failures.message(error)
             }
         } finally {
             isLoadingCategorySpending = false
@@ -1268,7 +1269,7 @@ class GroupScreenModel(
                 isOffline = true
                 return
             }
-            activitiesFailure = error.localizedMessage
+            activitiesFailure = Failures.message(error)
             didLoadActivities = true
         }
     }
@@ -1402,7 +1403,7 @@ class GroupScreenModel(
                     isOffline = true
                     loadLocalSearch(query)
                 } else {
-                    searchFailure = error.localizedMessage
+                    searchFailure = Failures.message(error)
                 }
             }
         } finally {
@@ -1583,7 +1584,7 @@ class GroupScreenModel(
                         add(searchIndex, pending.expense)
                     }
                 }
-                expensesFailure = error.localizedMessage
+                expensesFailure = Failures.message(error)
             }
         }
     }

@@ -45,6 +45,7 @@ import app.spliit.data.model.Group
 import app.spliit.data.remote.SpliitApi
 import app.spliit.domain.CurrencyCatalog
 import app.spliit.domain.CurrencyInfo
+import app.spliit.domain.Failures
 import app.spliit.domain.GroupFormDraft
 import app.spliit.domain.InstanceChoice
 import app.spliit.domain.ParticipantDraft
@@ -133,11 +134,10 @@ fun CreateGroupSheet(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                failure = error.localizedMessage ?: if (isEditing) {
-                    "Couldn’t save the group."
-                } else {
-                    "Couldn’t create the group."
-                }
+                failure = Failures.message(
+                    error,
+                    if (isEditing) "Couldn’t save the group." else "Couldn’t create the group.",
+                )
             } finally {
                 isSaving = false
             }

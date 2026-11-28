@@ -91,6 +91,7 @@ import app.spliit.data.local.RecentGroup
 import app.spliit.data.local.ThemeChoice
 import app.spliit.data.model.GroupSummary
 import app.spliit.data.remote.SpliitApi
+import app.spliit.domain.Failures
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
@@ -1083,7 +1084,7 @@ class GroupsListModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                errorMessage = error.localizedMessage
+                errorMessage = Failures.message(error)
             } finally {
                 isRefreshing = false
             }

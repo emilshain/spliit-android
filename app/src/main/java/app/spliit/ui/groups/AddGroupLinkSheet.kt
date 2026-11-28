@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
 import app.spliit.data.remote.SpliitApi
+import app.spliit.domain.Failures
 import app.spliit.domain.GroupLink
 import app.spliit.domain.ServerInstance
 import app.spliit.ui.theme.SpliitType
@@ -93,7 +94,7 @@ fun AddGroupLinkSheet(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                problem = error.localizedMessage
+                problem = Failures.message(error, "Couldn’t check that link. Try again.")
             } finally {
                 isChecking = false
             }

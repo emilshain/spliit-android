@@ -45,7 +45,19 @@ class TrpcServerException(
     val isUnknownProcedure: Boolean get() = code == "NOT_FOUND"
 }
 
-class TrpcClientException(message: String, cause: Throwable? = null) : IOException(message, cause)
+/**
+ * A failure in this client rather than an answer from the server.
+ *
+ * [readable] says whether [message] is already written for a person. A message this client
+ * composed ("This Spliit server doesn’t accept receipt photos") is; one carrying a platform
+ * error, or describing a response that made no sense, is not — the screens show those through
+ * [app.spliit.domain.Failures] instead of the text itself.
+ */
+class TrpcClientException(
+    message: String,
+    cause: Throwable? = null,
+    val readable: Boolean = true,
+) : IOException(message, cause)
 
 /**
  * Talks to a Spliit instance's tRPC endpoint.
@@ -73,7 +85,11 @@ class TrpcClient(
             return try {
                 SuperJson.decode(procedure.deserializer, body)
             } catch (error: Exception) {
-                throw TrpcClientException("Couldn't decode the response: ${error.message}", error)
+                throw TrpcClientException(
+                    "Couldn't decode the response: ${error.message}",
+                    error,
+                    readable = false,
+                )
             }
         }
 
@@ -87,7 +103,10 @@ class TrpcClient(
             )
         }
 
-        throw TrpcClientException("Unexpected response ($status): ${body.take(512)}")
+        throw TrpcClientException(
+            "Unexpected response ($status): ${body.take(512)}",
+            readable = false,
+        )
     }
 
     private fun buildRequest(procedure: TrpcProcedure<*>): Request {
@@ -130,7 +149,13 @@ class TrpcClient(
                         if (continuation.isCancelled) return
                         continuation.resumeWithException(
                             if (e is TrpcServerException) e
-                            else TrpcClientException(e.localizedMessage ?: "Network error", e),
+                            else TrpcClientException(
+                                e.localizedMessage ?: "Network error",
+                                e,
+                                // The platform's own wording, which names Java classes and
+                                // hostnames rather than the connection.
+                                readable = false,
+                            ),
                         )
                     }
 
@@ -140,7 +165,11 @@ class TrpcClient(
                                 .getOrElse { error ->
                                     if (!continuation.isCancelled) {
                                         continuation.resumeWithException(
-                                            TrpcClientException("Couldn't read the response.", error),
+                                            TrpcClientException(
+                                                "Couldn't read the response.",
+                                                error,
+                                                readable = false,
+                                            ),
                                         )
                                     }
                                     return
@@ -290,8 +319,7 @@ class TrpcClient(
 
     companion object {
         /** What a server says, in a person's words, when it has no storage to put photos in. */
-        const val UNAVAILABLE =
-            "This Spliit server doesn’t accept receipt photos. The feature is off on the server."
+        const val UNAVAILABLE = "This Spliit server doesn’t accept receipt photos."
 
         private const val DOCUMENT_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
 

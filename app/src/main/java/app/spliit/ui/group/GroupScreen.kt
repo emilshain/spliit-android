@@ -98,6 +98,7 @@ import app.spliit.data.model.Group
 import app.spliit.data.model.Reimbursement
 import app.spliit.data.remote.DeleteGroupInput
 import app.spliit.data.remote.SpliitApi
+import app.spliit.domain.Failures
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.GroupExport
@@ -205,7 +206,7 @@ fun GroupScreen(
                 stream.write(csv.toByteArray(Charsets.UTF_8))
             } ?: error("The chosen file could not be opened.")
         }.onFailure { error ->
-            exportFailure = error.localizedMessage ?: "Couldn’t write the file."
+            exportFailure = Failures.message(error, "Couldn’t write the file.")
         }
     }
 
@@ -224,7 +225,7 @@ fun GroupScreen(
                 pendingImport = rows
             }
         }.onFailure { error ->
-            importFailure = error.localizedMessage ?: "That file is not an expense CSV."
+            importFailure = Failures.message(error, "That file is not an expense CSV.")
         }
     }
 
@@ -246,7 +247,7 @@ fun GroupScreen(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                importFailure = error.localizedMessage ?: "The import did not finish."
+                importFailure = Failures.message(error, "The import did not finish.")
             } finally {
                 isImporting = false
             }
@@ -264,7 +265,7 @@ fun GroupScreen(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                exportFailure = error.localizedMessage ?: "Couldn’t export the expenses."
+                exportFailure = Failures.message(error, "Couldn’t export the expenses.")
             } finally {
                 isExporting = false
             }
@@ -326,10 +327,12 @@ fun GroupScreen(
         scope.launch {
             val loaded = model.expense(id)
             detail = loaded
-            detailFailure = if (loaded == null) {
-                "This expense couldn’t be loaded. It may have been deleted."
-            } else {
-                null
+            // Offline, an expense that was never opened has nothing to be drawn from; saying it
+            // may have been deleted would blame the server for the phone's connection.
+            detailFailure = when {
+                loaded != null -> null
+                model.isOffline -> "This expense isn’t saved on this phone. It needs a connection to open."
+                else -> "This expense couldn’t be loaded. It may have been deleted."
             }
             isLoadingDetail = false
         }
@@ -783,7 +786,7 @@ fun GroupScreen(
                                 throw error
                             } catch (error: Exception) {
                                 deleteGroupFailure =
-                                    error.localizedMessage ?: "Couldn’t delete the group."
+                                    Failures.message(error, "Couldn’t delete the group.")
                             } finally {
                                 isDeletingGroup = false
                             }
@@ -1113,7 +1116,7 @@ private fun SettingsTab(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                saveFailure = error.localizedMessage ?: "Couldn’t save the group."
+                saveFailure = Failures.message(error, "Couldn’t save the group.")
             } finally {
                 isSaving = false
             }

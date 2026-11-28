@@ -60,6 +60,7 @@ import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.Group
 import app.spliit.data.model.SplitMode
 import app.spliit.data.remote.SpliitApi
+import app.spliit.domain.Failures
 import app.spliit.data.remote.TrpcServerException
 import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
@@ -166,7 +167,7 @@ fun ExpenseFormSheet(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                receiptFailure = error.localizedMessage ?: "Couldn’t add the receipt."
+                receiptFailure = Failures.message(error, "Couldn’t add the receipt.")
             } finally {
                 uploadingReceipt = false
             }
@@ -301,7 +302,7 @@ fun ExpenseFormSheet(
                     queue(values)
                     onSaved()
                 } else {
-                    failure = error.localizedMessage ?: "Couldn’t save the expense."
+                    failure = Failures.message(error, "Couldn’t save the expense.")
                 }
             } finally {
                 isSaving = false
@@ -618,7 +619,7 @@ fun ExpenseFormSheet(
                                 } catch (error: CancellationException) {
                                     throw error
                                 } catch (error: Exception) {
-                                    failure = error.localizedMessage
+                                    failure = Failures.message(error, "Couldn’t delete the expense.")
                                 } finally {
                                     isSaving = false
                                 }
