@@ -14,7 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -45,7 +44,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PersonAdd
@@ -59,7 +57,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,9 +82,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.text.font.FontWeight
@@ -101,8 +96,8 @@ import app.spliit.data.model.Group
 import app.spliit.data.model.Reimbursement
 import app.spliit.data.remote.DeleteGroupInput
 import app.spliit.data.remote.SpliitApi
+import app.spliit.domain.dateLabel
 import app.spliit.domain.Failures
-import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.GroupExport
 import app.spliit.domain.GroupFormDraft
@@ -135,11 +130,6 @@ import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SelectionState
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.totals.TotalsTab
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.time.Instant
-import java.time.ZoneId
-import java.util.Locale
 import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -1552,11 +1542,6 @@ private fun Fact(label: String, value: String) {
         Text(text = value)
     }
 }
-
-private fun dateLabel(instant: Instant): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-        .withLocale(Locale.getDefault())
-        .format(instant.atZone(ZoneId.systemDefault()).toLocalDate())
 
 /**
  * A fresh expense ID, minted before saving so the split the form previews is the one the expense

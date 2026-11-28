@@ -48,8 +48,11 @@ import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Participant
 import app.spliit.domain.CategorySpending
 import app.spliit.domain.MoneyFormatter
+import app.spliit.ui.group.loadCategorySpending
+import app.spliit.ui.group.loadStats
 import app.spliit.ui.group.ParticipantTotal
 import app.spliit.ui.group.GroupScreenModel
+import app.spliit.ui.group.refreshStatsNow
 import app.spliit.ui.theme.CategoryIcons
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt

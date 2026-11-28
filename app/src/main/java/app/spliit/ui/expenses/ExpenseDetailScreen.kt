@@ -45,7 +45,7 @@ import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.ExpenseDocument
 import app.spliit.data.model.Participant
 import app.spliit.data.model.SplitMode
-import app.spliit.domain.CalendarDay
+import app.spliit.domain.dateLabel
 import app.spliit.domain.ExpenseShares
 import app.spliit.domain.MoneyFormatter
 import app.spliit.ui.theme.CategoryIcons
@@ -61,8 +61,6 @@ import app.spliit.ui.theme.SkeletonSection
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.theme.TornReceiptShape
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
@@ -201,7 +199,7 @@ private fun Receipt(
                     )
                     Spacer(Modifier.size(4.dp))
                     Text(
-                        text = dateLabel(expense),
+                        text = dateLabel(expense.expenseDate),
                         style = SpliitType.Secondary,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -418,11 +416,6 @@ private fun splitLabel(mode: SplitMode): String = when (mode) {
     SplitMode.BY_PERCENTAGE -> "By percentage"
     SplitMode.BY_AMOUNT -> "By amount"
 }
-
-private fun dateLabel(expense: ExpenseDetails): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-        .withLocale(Locale.getDefault())
-        .format(CalendarDay.dayOf(expense.expenseDate))
 
 /** The receipt, before the expense arrives. */
 @Composable

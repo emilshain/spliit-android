@@ -44,6 +44,7 @@ import app.spliit.ui.expenses.ExpenseRow
 import app.spliit.ui.expenses.ExpenseUndoBar
 import app.spliit.ui.group.ExpenseSection
 import app.spliit.ui.group.GroupScreenModel
+import app.spliit.ui.group.loadNextSearchPage
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt

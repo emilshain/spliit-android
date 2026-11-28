@@ -96,6 +96,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.spliit.AppContainer
+import app.spliit.domain.dateLabel
 import app.spliit.R
 import app.spliit.data.local.AppearancePalette
 import app.spliit.data.local.RecentGroup
@@ -110,7 +111,6 @@ import app.spliit.ui.theme.ExpressiveMenu
 import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.ExpressiveSwipe
 import app.spliit.ui.theme.SwipeAction
-import app.spliit.ui.theme.MenuPlacement
 import app.spliit.ui.theme.Monogram
 import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.PaletteTemplates
@@ -125,11 +125,6 @@ import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitPalette
 import app.spliit.ui.theme.SpliitType
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.time.Instant
-import java.time.ZoneId
-import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
@@ -1226,12 +1221,6 @@ private fun GroupMeta(summary: GroupSummary?) {
         )
     }
 }
-
-/** "Nov 24, 2026", in the user's own date format. */
-private fun dateLabel(instant: Instant): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-        .withLocale(Locale.getDefault())
-        .format(instant.atZone(ZoneId.systemDefault()).toLocalDate())
 
 /**
  * What the list knows, and what the servers told it.

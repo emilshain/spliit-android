@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.spliit.ui.group.GroupScreenModel
+import app.spliit.ui.group.undoDelete
 import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion

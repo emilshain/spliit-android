@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import app.spliit.data.model.Participant
 import app.spliit.ui.group.ExpenseSection
 import app.spliit.ui.group.GroupScreenModel
+import app.spliit.ui.group.loadNextPage
 import app.spliit.ui.theme.DateBucketHeader
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt

@@ -21,14 +21,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -60,9 +58,9 @@ import app.spliit.data.model.ExpenseDetails
 import app.spliit.data.model.Group
 import app.spliit.data.model.SplitMode
 import app.spliit.data.remote.SpliitApi
+import app.spliit.domain.dateLabel
 import app.spliit.domain.Failures
 import app.spliit.data.remote.TrpcServerException
-import app.spliit.domain.CalendarDay
 import app.spliit.domain.ExpenseFormDraft
 import app.spliit.domain.ParticipantShare
 import app.spliit.ui.theme.ExpandChevron
@@ -76,7 +74,6 @@ import app.spliit.ui.theme.SpliitType
 import app.spliit.ui.theme.stackedCardShape
 import java.io.File
 import java.io.IOException
-import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -814,7 +811,3 @@ private fun SplitMode.unitLabel(currency: String): String = when (this) {
 
 private fun groupFormatter(group: Group): app.spliit.domain.MoneyFormatter =
     app.spliit.domain.MoneyFormatter(group.currency, group.currencyCode)
-
-private fun dateLabel(date: LocalDate): String =
-    java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-        .format(date)
