@@ -6,6 +6,10 @@ import app.spliit.data.model.ExpenseListItem
 import app.spliit.data.model.Group
 import app.spliit.data.model.Participant
 import app.spliit.data.model.SplitMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -101,44 +105,53 @@ class ExpenseOutbox(context: Context) {
         encodeDefaults = true
     }
 
-    private val lock = Any()
+    /**
+     * Serialises the read-modify-write of the single file.
+     *
+     * A [Mutex] rather than a `synchronized` block: the work under it goes to the IO pool, and a
+     * thread held across a suspension point is how a background pool ends up with no threads.
+     */
+    private val mutex = Mutex()
 
-    fun all(): List<PendingExpense> = synchronized(lock) {
+    suspend fun all(): List<PendingExpense> = mutex.withLock { readLocked() }
+
+    suspend fun forGroup(groupId: String): List<PendingExpense> = all().filter { it.groupId == groupId }
+
+    /** Adds or replaces the change for one expense: the newest version of it is the one to send. */
+    suspend fun put(pending: PendingExpense) = mutex.withLock {
+        val rows = readLocked().toMutableList()
+        rows.removeAll { it.groupId == pending.groupId && it.key == pending.key }
+        rows += pending
+        writeLocked(rows)
+    }
+
+    suspend fun remove(pending: PendingExpense) = mutex.withLock {
+        writeLocked(readLocked().filterNot { it.groupId == pending.groupId && it.key == pending.key })
+    }
+
+    suspend fun forget(groupId: String) = mutex.withLock {
+        writeLocked(readLocked().filterNot { it.groupId == groupId })
+    }
+
+    /** Reading and writing the outbox is a file of its own; neither belongs on the main thread. */
+    private suspend fun readLocked(): List<PendingExpense> = withContext(Dispatchers.IO) {
         runCatching {
-            if (!file.exists()) return emptyList()
-            json.decodeFromString(serializer, file.readText())
+            if (!file.exists()) emptyList()
+            else json.decodeFromString(serializer, file.readText())
         }.getOrDefault(emptyList())
     }
 
-    fun forGroup(groupId: String): List<PendingExpense> =
-        all().filter { it.groupId == groupId }
-
-    /** Adds or replaces the change for one expense: the newest version of it is the one to send. */
-    fun put(pending: PendingExpense) = synchronized(lock) {
-        val rows = all().toMutableList()
-        rows.removeAll { it.groupId == pending.groupId && it.key == pending.key }
-        rows += pending
-        write(rows)
-    }
-
-    fun remove(pending: PendingExpense) = synchronized(lock) {
-        write(all().filterNot { it.groupId == pending.groupId && it.key == pending.key })
-    }
-
-    fun forget(groupId: String) = synchronized(lock) {
-        write(all().filterNot { it.groupId == groupId })
-    }
-
-    private fun write(rows: List<PendingExpense>) {
-        runCatching {
-            val temporary = File(file.parentFile, "${file.name}.tmp")
-            temporary.writeText(json.encodeToString(serializer, rows))
-            if (!temporary.renameTo(file)) {
-                file.writeText(temporary.readText())
-                temporary.delete()
+    private suspend fun writeLocked(rows: List<PendingExpense>) =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val temporary = File(file.parentFile, "${file.name}.tmp")
+                temporary.writeText(json.encodeToString(serializer, rows))
+                if (!temporary.renameTo(file)) {
+                    file.writeText(temporary.readText())
+                    temporary.delete()
+                }
             }
         }
-    }
 
     private companion object {
         /** The file is always the same shape, whatever Kotlin infers from the call site. */

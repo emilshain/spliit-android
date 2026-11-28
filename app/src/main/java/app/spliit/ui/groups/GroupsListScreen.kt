@@ -1256,10 +1256,9 @@ class GroupsListModel(
     var hasLoadedGroups by mutableStateOf(false)
         private set
     // A visit's own counts, so coming back to the list shows them while the servers answer
-    // again rather than a row of "…".
-    var summaries by mutableStateOf(
-        container.lastGroupSummaries.ifEmpty { container.groupCache.loadSummaries() },
-    )
+    // again rather than a row of "…". The copy on disk is read in [start], off the main thread;
+    // reading it here would make constructing the screen a file read on the first frame.
+    var summaries by mutableStateOf(container.lastGroupSummaries)
         private set
     var errorMessage by mutableStateOf<String?>(null)
         private set
@@ -1270,6 +1269,13 @@ class GroupsListModel(
 
     /** Reloads whenever the remembered groups change, as the iOS list does. */
     fun start() {
+        scope.launch {
+            // The last visit's counts, if this launch has not read them yet.
+            if (summaries.isEmpty()) {
+                val remembered = container.groupCache.loadSummaries()
+                if (summaries.isEmpty() && remembered.isNotEmpty()) summaries = remembered
+            }
+        }
         scope.launch {
             container.recentGroups.groups.collect { remembered ->
                 groups = remembered

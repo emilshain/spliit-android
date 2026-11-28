@@ -1,6 +1,7 @@
 package app.spliit.ui.group
 
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -168,12 +169,19 @@ class GroupScreenModel(
      * participant section from: reimbursements are not spending, and a person's share is the
      * apportionment the balances tab charges them.
      */
-    val participantTotals: List<ParticipantTotal>
-        get() {
-            val currentGroup = group ?: return emptyList()
-            // The sweep over every page fills these; until it has, the rows on hand answer.
-            participantSums?.let { sums ->
-                return currentGroup.participants
+    // Derived rather than recomputed: a fold over every expense is not something to run again
+    // each time the composition reads the property, and the snapshot system can tell the reader
+    // that the answer has not changed. It recomputes only when the group, its expenses or the
+    // sweep's sums actually do.
+    val participantTotals: List<ParticipantTotal> by derivedStateOf {
+        val currentGroup = group
+        if (currentGroup == null) {
+            emptyList()
+        } else {
+            val sums = participantSums
+            if (sums != null) {
+                // The sweep over every page fills these; until it has, the rows on hand answer.
+                currentGroup.participants
                     .mapIndexed { position, participant ->
                         ParticipantTotal(
                             participant = participant,
@@ -186,40 +194,41 @@ class GroupScreenModel(
                         compareByDescending<ParticipantTotal> { it.paid }
                             .thenBy { it.position },
                     )
-            }
-            val counted = displayExpenses.filterNot { it.isReimbursement }
-            val paid = HashMap<String, Int>()
-            val share = HashMap<String, Int>()
-            for (expense in counted) {
-                paid[expense.paidBy.id] = (paid[expense.paidBy.id] ?: 0) + expense.amount
-                val parts = ExpenseShares.shares(
-                    expense.id,
-                    expense.amount,
-                    expense.splitMode,
-                    expense.paidFor,
-                )
-                for ((id, amount) in parts) {
-                    share[id] = (share[id] ?: 0) + amount
-                }
-            }
-            return currentGroup.participants
-                .mapIndexed { position, participant ->
-                    ParticipantTotal(
-                        participant = participant,
-                        position = position,
-                        paid = paid[participant.id] ?: 0,
-                        share = share[participant.id] ?: 0,
+            } else {
+                val counted = displayExpenses.filterNot { it.isReimbursement }
+                val paid = HashMap<String, Int>()
+                val share = HashMap<String, Int>()
+                for (expense in counted) {
+                    paid[expense.paidBy.id] = (paid[expense.paidBy.id] ?: 0) + expense.amount
+                    val parts = ExpenseShares.shares(
+                        expense.id,
+                        expense.amount,
+                        expense.splitMode,
+                        expense.paidFor,
                     )
+                    for ((id, amount) in parts) {
+                        share[id] = (share[id] ?: 0) + amount
+                    }
                 }
-                .sortedWith(
-                    compareByDescending<ParticipantTotal> { it.paid }
-                        .thenBy { it.position },
-                )
+                currentGroup.participants
+                    .mapIndexed { position, participant ->
+                        ParticipantTotal(
+                            participant = participant,
+                            position = position,
+                            paid = paid[participant.id] ?: 0,
+                            share = share[participant.id] ?: 0,
+                        )
+                    }
+                    .sortedWith(
+                        compareByDescending<ParticipantTotal> { it.paid }
+                            .thenBy { it.position },
+                    )
+            }
         }
+    }
 
     /** Expenses grouped into the sections the list shows, newest bucket first. */
-    val sections: List<ExpenseSection>
-        get() = sectionsOf(displayExpenses)
+    val sections: List<ExpenseSection> by derivedStateOf { sectionsOf(displayExpenses) }
 
     /** Whether a row is a change that has not reached the server yet. */
     fun isPending(expenseId: String): Boolean = pendingExpenses.any { it.key == expenseId }
@@ -229,10 +238,11 @@ class GroupScreenModel(
      * and an expense with a queued edit or delete keeps the server's row (the newest version is
      * what will be sent).
      */
-    private val displayExpenses: List<ExpenseListItem>
-        get() {
-            val queued = pendingExpenses
-            if (queued.isEmpty()) return expenses
+    private val displayExpenses: List<ExpenseListItem> by derivedStateOf {
+        val queued = pendingExpenses
+        if (queued.isEmpty()) {
+            expenses
+        } else {
             // A queued delete hides the row; a queued edit keeps it, because the server's
             // version is still the one on screen and the newest version is what will be sent.
             val replaced = queued.filter { it.kind == PendingExpense.Kind.DELETE }
@@ -240,11 +250,14 @@ class GroupScreenModel(
                 .toSet()
             val local = queued.filter { it.kind == PendingExpense.Kind.CREATE }
                 .mapNotNull { it.toListItem(group) }
-            return local + expenses.filterNot { it.id in replaced }
+            local + expenses.filterNot { it.id in replaced }
         }
+    }
 
-    val moneyFormatter: MoneyFormatter
-        get() = MoneyFormatter(group?.currency.orEmpty(), group?.currencyCode)
+    /** One formatter per group, not one per read: every row on screen asks for it. */
+    val moneyFormatter: MoneyFormatter by derivedStateOf {
+        MoneyFormatter(group?.currency.orEmpty(), group?.currencyCode)
+    }
 
     fun participant(id: String): Participant? = group?.participants?.firstOrNull { it.id == id }
 
@@ -259,13 +272,15 @@ class GroupScreenModel(
         val cached = container.groupCache.load(groupId)?.details?.get(id)
         // Whatever was written here is newer than any read, and with no network the read is not
         // going to happen at all.
-        val offlineCopy = { pendingDetail(id) ?: cached ?: listDetail(id) }
+        val queued = pendingDetail(id)
+        val offlineCopy = { queued ?: cached ?: listDetail(id) }
         val current = client ?: return offlineCopy()
         if (isOffline) return offlineCopy()
         val loaded = runCatching {
             current.call(SpliitApi.expense(groupId, id)).expense
         }.getOrNull()
         if (loaded != null) {
+            knownDetails = (knownDetails ?: emptyMap()) + (loaded.id to loaded)
             container.groupCache.saveDetail(groupId, loaded)
             return loaded
         }
@@ -302,7 +317,7 @@ class GroupScreenModel(
     }
 
     /** The detail of a change that has not reached the server, built from what it will send. */
-    private fun pendingDetail(id: String): ExpenseDetails? {
+    private suspend fun pendingDetail(id: String): ExpenseDetails? {
         val currentGroup = group ?: return null
         val pending = container.outbox.forGroup(groupId).firstOrNull { it.key == id } ?: return null
         val payer = currentGroup.participants.firstOrNull { it.id == pending.paidById }
@@ -367,13 +382,14 @@ class GroupScreenModel(
      * belongs to the screen that is watching it.
      */
     fun retryWhenBackOnline() {
-        refreshPending()
-        if (!isOffline && pendingExpenses.isEmpty()) return
         if (reconnectJob?.isActive == true) return
         // The network being back does not mean the server answers on the first try: a Wi-Fi
         // handshake, a warm TLS session and a group that was being read all take a moment.
         // Keep trying for a little while rather than waiting for the person to leave and return.
         reconnectJob = scope.launch {
+            // Reading the outbox is a file, so it happens in here rather than before the launch.
+            refreshPending()
+            if (!isOffline && pendingExpenses.isEmpty()) return@launch
             repeat(RECONNECT_ATTEMPTS) { attempt ->
                 reload()
                 if (!isOffline && pendingExpenses.isEmpty()) return@launch
@@ -396,7 +412,7 @@ class GroupScreenModel(
     }
 
     /** The outbox as it is on disk: another screen or an earlier launch may have changed it. */
-    private fun refreshPending() {
+    private suspend fun refreshPending() {
         pendingExpenses = container.outbox.forGroup(groupId)
     }
 
@@ -474,9 +490,10 @@ class GroupScreenModel(
             ).awaitAll()
         }
         // Reached the server: the snapshot on disk becomes this read, and whatever was waiting
-        // to be sent is sent now that there is somewhere to send it.
+        // to be sent is sent now that there is somewhere to send it. Written once, at the end:
+        // the file holds the whole group, so a write before the flush would only be undone by
+        // the one after it.
         if (group != null && !isOffline) {
-            persistSnapshot()
             if (flushPendingExpenses()) {
                 loadFirstPage(current)
                 // What was just sent is part of the server's answer now. Without asking again
@@ -488,13 +505,21 @@ class GroupScreenModel(
         }
     }
 
+    /**
+     * The details in the snapshot, read once and then kept.
+     *
+     * They belong to another screen, so a snapshot write has to preserve them rather than
+     * replace them with what this one loaded — but reading the file back on every write made
+     * each save a read of the whole group as well.
+     */
+    private var knownDetails: Map<String, ExpenseDetails>? = null
+
     /** Writes the group as it stands, so the next launch has something to open. */
-    private fun persistSnapshot() {
+    private suspend fun persistSnapshot() {
         val currentGroup = group ?: return
         // Details are another reader's cache; this write must not drop them.
-        val keptDetails = runCatching {
-            container.groupCache.load(groupId)?.details.orEmpty()
-        }.getOrDefault(emptyMap())
+        val keptDetails = knownDetails
+            ?: container.groupCache.load(groupId)?.details.orEmpty().also { knownDetails = it }
         container.groupCache.save(
             CachedGroup(
                 group = currentGroup,
@@ -521,6 +546,7 @@ class GroupScreenModel(
      * expenses loaded?") answers yes, because they have - just not now, and not from here.
      */
     private suspend fun restoreSnapshot(snapshot: CachedGroup) {
+        knownDetails = snapshot.details
         group = snapshot.group
         expenses = snapshot.expenses
         balances = snapshot.balances
@@ -1609,11 +1635,13 @@ class GroupScreenModel(
 
         expenses = expenses.filterNot { it.id in ids }
         searchResults = searchResults.filterNot { it.id in ids }
-        // A queued create is only a row here; the server has never seen it.
-        queued.forEach { container.outbox.remove(it) }
-        refreshPending()
+        // A queued create is only a row here; the server has never seen it. It leaves the screen
+        // now, and the outbox itself is rewritten below, off the main thread.
+        pendingExpenses = pendingExpenses.filterNot { it.key in ids }
 
         scope.launch {
+            queued.forEach { container.outbox.remove(it) }
+            refreshPending()
             val current = client ?: return@launch
             var failure: String? = null
             val refused = mutableListOf<ExpenseListItem>()

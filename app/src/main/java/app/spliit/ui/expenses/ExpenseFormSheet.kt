@@ -226,7 +226,7 @@ fun ExpenseFormSheet(
      * The request is stored exactly as it was built, which is what lets it be sent later without
      * the form existing any more.
      */
-    fun queue(values: app.spliit.data.remote.ExpenseFormValues) {
+    suspend fun queue(values: app.spliit.data.remote.ExpenseFormValues) {
         val category = categories.firstOrNull { it.id == values.category }
         container.outbox.put(
             PendingExpense(

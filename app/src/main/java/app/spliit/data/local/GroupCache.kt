@@ -11,6 +11,8 @@ import app.spliit.data.model.Group
 import app.spliit.data.model.GroupSummary
 import app.spliit.data.model.Reimbursement
 import app.spliit.domain.CategorySpending
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -45,14 +47,21 @@ class GroupCache(context: Context) {
     private val summariesSerializer =
         MapSerializer(String.serializer(), GroupSummary.serializer())
 
-    /** The snapshot for [groupId], or null when it has never loaded or the file is unusable. */
-    fun load(groupId: String): CachedGroup? = runCatching {
-        val file = fileFor(groupId)
-        if (!file.exists()) return null
-        json.decodeFromString(CachedGroup.serializer(), file.readText())
-    }.getOrNull()
+    /**
+     * The snapshot for [groupId], or null when it has never loaded or the file is unusable.
+     *
+     * Every call reads and parses a file of the whole group, so it is dispatched to the IO pool:
+     * on a large group a main-thread read is a visible stall on the frame it happens in.
+     */
+    suspend fun load(groupId: String): CachedGroup? = withContext(Dispatchers.IO) {
+        runCatching {
+            val file = fileFor(groupId)
+            if (!file.exists()) null
+            else json.decodeFromString(CachedGroup.serializer(), file.readText())
+        }.getOrNull()
+    }
 
-    fun save(snapshot: CachedGroup) {
+    suspend fun save(snapshot: CachedGroup) = withContext(Dispatchers.IO) {
         runCatching {
             directory.mkdirs()
             val file = fileFor(snapshot.group.id)
@@ -73,27 +82,30 @@ class GroupCache(context: Context) {
      * nothing to be drawn from. A detail that has been read once is kept here — read back out of
      * the snapshot rather than held in memory, so the file stays the one copy.
      */
-    fun saveDetail(groupId: String, detail: ExpenseDetails) {
+    suspend fun saveDetail(groupId: String, detail: ExpenseDetails) {
         val snapshot = load(groupId) ?: return
         save(snapshot.copy(details = snapshot.details + (detail.id to detail)))
     }
 
-    fun forget(groupId: String) {
+    suspend fun forget(groupId: String) = withContext(Dispatchers.IO) {
         runCatching { fileFor(groupId).delete() }
     }
 
     /** What the group list knew the last time an instance answered. */
-    fun loadSummaries(): Map<String, GroupSummary> = runCatching {
-        if (!summariesFile.exists()) return emptyMap()
-        json.decodeFromString(summariesSerializer, summariesFile.readText())
-    }.getOrDefault(emptyMap())
-
-    fun saveSummaries(summaries: Map<String, GroupSummary>) {
+    suspend fun loadSummaries(): Map<String, GroupSummary> = withContext(Dispatchers.IO) {
         runCatching {
-            summariesFile.parentFile?.mkdirs()
-            summariesFile.writeText(json.encodeToString(summariesSerializer, summaries))
-        }
+            if (!summariesFile.exists()) emptyMap()
+            else json.decodeFromString(summariesSerializer, summariesFile.readText())
+        }.getOrDefault(emptyMap())
     }
+
+    suspend fun saveSummaries(summaries: Map<String, GroupSummary>) =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                summariesFile.parentFile?.mkdirs()
+                summariesFile.writeText(json.encodeToString(summariesSerializer, summaries))
+            }
+        }
 
     private fun fileFor(groupId: String): File =
         File(directory, groupId.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".json")
