@@ -38,6 +38,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,7 +70,9 @@ import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.domain.ReceiptPhotos
 import app.spliit.ui.theme.Money
 import app.spliit.ui.theme.MoneySize
+import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitType
+import app.spliit.ui.theme.stackedCardShape
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
@@ -98,6 +101,8 @@ fun ExpenseFormSheet(
     mintedExpenseId: String,
     /** What the category picker offers. Empty while the instance has not answered. */
     categories: List<ExpenseCategory>,
+    /** Whether this group's instance stores receipt photographs: off, the section is not shown. */
+    receiptsEnabled: Boolean = true,
     /** The instance this group is on: an expense is written to the server the group is on. */
     instanceUrl: String,
     actorId: String?,
@@ -468,30 +473,69 @@ fun ExpenseFormSheet(
                     }
                 }
 
-                draft.participants.forEach { participant ->
-                    ParticipantRow(
-                        participant = participant,
-                        splitMode = draft.splitMode,
-                        shareAmount = shares?.get(participant.id),
-                        moneyFormatter = groupFormatter(group),
-                        onChangeIncluded = { included ->
-                            draft = draft.copy(
-                                participants = draft.participants.map {
-                                    if (it.id == participant.id) it.copy(isIncluded = included) else it
+                // The people being split between are one stack of cards, the same as a day's
+                // expenses in the list: shared sides take the small corner, the ends take the
+                // card's own, and the gap between them is the stack gap. A plain run of rows
+                // read as a form; this reads as the group it is.
+                draft.participants.forEachIndexed { index, participant ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                top = if (index == 0) {
+                                    SpliitDimens.Space0
+                                } else {
+                                    SpliitDimens.CardGap
                                 },
-                            ).rebalanced()
-                        },
-                        onChangeValue = { value ->
-                            draft = draft.copy(
-                                participants = draft.participants.map {
-                                    if (it.id == participant.id) it.copy(valueText = value) else it
+                            ),
+                        shape = stackedCardShape(
+                            first = index == 0,
+                            last = index == draft.participants.lastIndex,
+                        ),
+                        // The sheet itself is already `surfaceContainerLow`, so a card in that
+                        // role would be white on white. One step up the tonal ladder is what
+                        // makes the stack visible inside a sheet.
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(
+                                horizontal = SpliitDimens.RowPaddingHorizontal,
+                                vertical = SpliitDimens.RowPaddingVertical,
+                            ),
+                        ) {
+                            ParticipantRow(
+                                participant = participant,
+                                splitMode = draft.splitMode,
+                                shareAmount = shares?.get(participant.id),
+                                moneyFormatter = groupFormatter(group),
+                                onChangeIncluded = { included ->
+                                    draft = draft.copy(
+                                        participants = draft.participants.map {
+                                            if (it.id == participant.id) {
+                                                it.copy(isIncluded = included)
+                                            } else {
+                                                it
+                                            }
+                                        },
+                                    ).rebalanced()
                                 },
-                            ).rebalanced()
-                        },
-                    )
-                    if (hasAttemptedSave) {
-                        draft.problemsForParticipant(participant.id).firstOrNull()?.let {
-                            FieldError(it.message)
+                                onChangeValue = { value ->
+                                    draft = draft.copy(
+                                        participants = draft.participants.map {
+                                            if (it.id == participant.id) {
+                                                it.copy(valueText = value)
+                                            } else {
+                                                it
+                                            }
+                                        },
+                                    ).rebalanced()
+                                },
+                            )
+                            if (hasAttemptedSave) {
+                                draft.problemsForParticipant(participant.id).firstOrNull()?.let {
+                                    FieldError(it.message)
+                                }
+                            }
                         }
                     }
                 }
@@ -542,19 +586,24 @@ fun ExpenseFormSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                // Documents are opt-in on a Spliit instance. Where the server has no bucket,
+                // offering the button would be offering an upload that can only be refused, so
+                // the row is not there at all.
+                if (receiptsEnabled) {
+                    HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
 
-                ReceiptAttachments(
-                    documents = draft.documents,
-                    uploading = uploadingReceipt,
-                    failure = receiptFailure,
-                    onAdd = { if (!uploadingReceipt) pickReceipt() },
-                    onRemove = { document ->
-                        draft = draft.copy(
-                            documents = draft.documents.filterNot { it.id == document.id },
-                        )
-                    },
-                )
+                    ReceiptAttachments(
+                        documents = draft.documents,
+                        uploading = uploadingReceipt,
+                        failure = receiptFailure,
+                        onAdd = { if (!uploadingReceipt) pickReceipt() },
+                        onRemove = { document ->
+                            draft = draft.copy(
+                                documents = draft.documents.filterNot { it.id == document.id },
+                            )
+                        },
+                    )
+                }
 
                 if (editing != null) {
                     TextButton(

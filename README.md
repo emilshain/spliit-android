@@ -119,7 +119,7 @@ Install with the phone plugged in and USB debugging on (Developer options → US
 
 ```sh
 adb devices                  # confirm the phone is listed and authorised
-adb install -r spliit-0.1.1-release.apk
+adb install -r spliit-0.1.0-release.apk
 ```
 
 Without adb — copy the file over (USB file transfer, cloud drive, email) and tap it in
@@ -138,8 +138,8 @@ The local scripts build, align and sign it in one step. They are git-ignored bec
 this machine's tool paths:
 
 ```sh
-bash run-local.sh apk         # dist/spliit-0.1.1-release.apk, for spliit.app groups
-bash run-local.sh apk debug   # dist/spliit-0.1.1-debug.apk, for a local http server
+bash run-local.sh apk         # dist/spliit-0.1.0-release.apk, for spliit.app groups
+bash run-local.sh apk debug   # dist/spliit-0.1.0-debug.apk, for a local http server
 ```
 
 Or double-click `make-apk.cmd` (and `make-apk.cmd debug` for the debug build).
@@ -159,7 +159,7 @@ mkdir -p dist
 "$BT/zipalign.exe" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk dist/aligned.apk
 "$BT/apksigner.bat" sign --ks "$KS" --ks-key-alias spliit \
   --ks-pass pass:spliitdev --key-pass pass:spliitdev \
-  --out dist/spliit-0.1.1-release.apk dist/aligned.apk
+  --out dist/spliit-0.1.0-release.apk dist/aligned.apk
 rm dist/aligned.apk
 ```
 

@@ -49,6 +49,21 @@ object ServerInstance {
         baseUrl.trimEnd('/').equals(DEFAULT_BASE_URL, ignoreCase = true)
 
     /**
+     * Whether this address is spliit.app itself.
+     *
+     * It matters for features the instance decides for itself: the hosted service runs without
+     * the bucket that receipt photographs need, so its groups never offer an upload. Answered
+     * from the address rather than by asking, because the answer cannot change there.
+     */
+    fun isHosted(baseUrl: String): Boolean {
+        val host = runCatching { URI(baseUrl.trim()) }.getOrNull()
+            ?.host
+            ?.lowercase()
+            ?: return false
+        return host == "spliit.app" || host.endsWith(".spliit.app")
+    }
+
+    /**
      * What to call an instance on screen: the host, with the port and path when it has them,
      * and never the scheme. "spliit.app" is what people call it; a row reading
      * "https://spliit.app/" is a URL rather than a name.

@@ -104,6 +104,8 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.PaletteTemplates
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
+import app.spliit.ui.theme.stackedCardPadding
+import app.spliit.ui.theme.stackedCardShape
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitElevation
 import app.spliit.ui.theme.SpliitMotion
@@ -390,12 +392,7 @@ private fun AppearanceSheet(
             ThemeChoice.entries.forEachIndexed { index, option ->
                 val first = index == 0
                 val last = index == ThemeChoice.entries.lastIndex && !offersDynamicColor
-                val shape = RoundedCornerShape(
-                    topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-                    topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-                    bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-                    bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-                )
+                val shape = stackedCardShape(first = first, last = last)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -510,17 +507,12 @@ private fun PaletteRow(
     last: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(
-        topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-        topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-        bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-        bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    )
+    val shape = stackedCardShape(first = first, last = last)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = if (first) 0.dp else 2.dp)
+            .padding(top = if (first) SpliitDimens.Space0 else SpliitDimens.CardGap)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .clickable { onClick() }
@@ -869,22 +861,12 @@ private fun GroupRow(
 
     // Cards that touch are one group: the sides they share take the small corner and the sides
     // facing air keep the large one, so a section reads as a stack rather than a pile of tiles.
-    val shape = RoundedCornerShape(
-        topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-        topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-        bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-        bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    )
+    val shape = stackedCardShape(first = first, last = last)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = SpliitDimens.ScreenGutter)
-            // Neighbours nearly touch; only the top of a section gets air above it.
-            .padding(
-                top = if (first) SpliitDimens.CardSpacing / 2 else 0.dp,
-                bottom = SpliitDimens.CardGap,
-            ),
+            .stackedCardPadding(first),
     ) {
         ExpressiveSwipe(
             modifier = Modifier.fillMaxWidth(),

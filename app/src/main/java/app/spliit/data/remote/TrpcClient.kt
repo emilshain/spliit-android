@@ -170,6 +170,40 @@ class TrpcClient(
     }
 
     /**
+     * Whether this instance can store receipt photographs at all.
+     *
+     * Spliit turns expense documents on with `ENABLE_EXPENSE_DOCUMENTS` and an S3 bucket; with
+     * either missing, `/api/s3-upload` has no policy to sign for and answers with an error. Asking
+     * it for one is the only way a client can tell — the flag is server-side and not part of any
+     * tRPC response — so this asks once per process and remembers the answer. No file is sent:
+     * the policy is the request's whole answer, and a policy nobody uses stores nothing.
+     *
+     * A network failure is not a verdict: the server may well accept photos, and hiding the
+     * feature because a request timed out would be wrong. Only an answer from the server counts.
+     */
+    suspend fun supportsDocuments(): Boolean {
+        documentsSupported?.let { return it }
+        val probe = buildJsonObject {
+            put("filename", "receipt-probe.jpg")
+            put("contentType", "image/jpeg")
+        }
+        val request = Request.Builder()
+            .url(plainUrl("api/s3-upload"))
+            .post(probe.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        val supported = try {
+            execute(request).first in 200..299
+        } catch (error: IOException) {
+            return true
+        }
+        documentsSupported = supported
+        return supported
+    }
+
+    /** The answer to [supportsDocuments], once the instance has given one. */
+    private var documentsSupported: Boolean? = null
+
+    /**
      * Uploads one receipt photograph to the instance and returns the document to attach.
      *
      * Spliit keeps the bytes in the instance's own object storage — S3, or anything S3-compatible

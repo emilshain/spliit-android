@@ -52,6 +52,7 @@ import app.spliit.ui.theme.ExpressiveMenuItem
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SearchPill
 import app.spliit.ui.theme.SkeletonRow
+import app.spliit.ui.theme.stackedCardShape
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
@@ -271,23 +272,18 @@ private fun Results(
                 // expense itself.
                 // The same corner scale as the list these came out of, so a result and its
                 // original row are the same card.
-                val shape = RoundedCornerShape(
-                    topStart = if (index == 0) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-                    topEnd = if (index == 0) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-                    bottomStart = if (index == section.expenses.lastIndex) {
-                        SpliitDimens.CardCorner
-                    } else {
-                        SpliitDimens.AdjacentCorner
-                    },
-                    bottomEnd = if (index == section.expenses.lastIndex) {
-                        SpliitDimens.CardCorner
-                    } else {
-                        SpliitDimens.AdjacentCorner
-                    },
+                val shape = stackedCardShape(
+                    first = index == 0,
+                    last = index == section.expenses.lastIndex,
                 )
                 // The card is the button: its own ripple, clipped to its own corners, rather
                 // than a full-width rectangle behind it.
-                Box(modifier = Modifier.fillMaxWidth().animateItem()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = if (index == 0) SpliitDimens.Space0 else SpliitDimens.CardGap)
+                        .animateItem(),
+                ) {
                     Column {
                         ExpenseRow(
                             onClick = { onEdit(expense.id) },

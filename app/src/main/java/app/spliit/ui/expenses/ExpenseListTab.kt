@@ -62,6 +62,7 @@ import app.spliit.ui.theme.MonogramPalette
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SkeletonCard
 import app.spliit.ui.theme.SkeletonRow
+import app.spliit.ui.theme.stackedCardShape
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.SpliitType
@@ -211,27 +212,9 @@ fun ExpenseListTab(
                             ) { index, expense ->
                                 // Opening is the whole gesture here: deleting lives on the
                                 // expense itself, so the row is free to belong to the pager.
-                                val shape = RoundedCornerShape(
-                                    topStart = if (index == 0) {
-                                        SpliitDimens.CardCorner
-                                    } else {
-                                        SpliitDimens.AdjacentCorner
-                                    },
-                                    topEnd = if (index == 0) {
-                                        SpliitDimens.CardCorner
-                                    } else {
-                                        SpliitDimens.AdjacentCorner
-                                    },
-                                    bottomStart = if (index == section.expenses.lastIndex) {
-                                        SpliitDimens.CardCorner
-                                    } else {
-                                        SpliitDimens.AdjacentCorner
-                                    },
-                                    bottomEnd = if (index == section.expenses.lastIndex) {
-                                        SpliitDimens.CardCorner
-                                    } else {
-                                        SpliitDimens.AdjacentCorner
-                                    },
+                                val shape = stackedCardShape(
+                                    first = index == 0,
+                                    last = index == section.expenses.lastIndex,
                                 )
                                 // The ripple belongs to the card, not to the row's full width:
                                 // the tap is passed into the card, so it is clipped to its own
@@ -244,6 +227,7 @@ fun ExpenseListTab(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(top = if (index == 0) SpliitDimens.Space0 else SpliitDimens.CardGap)
                                         .animateItem(
                                             placementSpec = SpliitMotion.spatialFast<IntOffset>(),
                                             fadeInSpec = SpliitMotion.effectsDefault(),

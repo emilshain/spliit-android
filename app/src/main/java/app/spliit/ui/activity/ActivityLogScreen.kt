@@ -61,6 +61,8 @@ import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.SkeletonRow
 import app.spliit.ui.theme.SkeletonSection
+import app.spliit.ui.theme.stackedCardPadding
+import app.spliit.ui.theme.stackedCardShape
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.pressScale
 import app.spliit.ui.theme.SpliitType
@@ -153,7 +155,8 @@ private fun ActivityList(
                         participantName = activity.participantId?.let { model.participant(it)?.name },
                         showsDate = false,
                         opensExpense = activity.expenseStillExists,
-                        shape = activityShape(
+                        first = index == 0,
+                        shape = stackedCardShape(
                             first = index == 0,
                             last = index == section.activities.lastIndex,
                         ),
@@ -187,6 +190,7 @@ private fun ActivityRow(
     participantName: String?,
     showsDate: Boolean,
     opensExpense: Boolean,
+    first: Boolean,
     shape: Shape,
     onOpen: () -> Unit,
 ) {
@@ -194,7 +198,7 @@ private fun ActivityRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SpliitDimens.ScreenGutter, vertical = SpliitDimens.CardGap)
+            .stackedCardPadding(first)
             .then(
                 if (opensExpense) {
                     Modifier
@@ -248,14 +252,6 @@ private fun ActivityRow(
         }
     }
 }
-
-/** A row's own corners, and the smaller ones it shares with the row above or below it. */
-private fun activityShape(first: Boolean, last: Boolean): RoundedCornerShape = RoundedCornerShape(
-    topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-)
 
 /** The same glyphs the app uses for these actions elsewhere. */
 private fun symbol(type: ActivityType): ImageVector = when (type) {

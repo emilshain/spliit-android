@@ -58,6 +58,15 @@ It also speaks the document upload handshake, so a receipt photo can be attached
 an S3 bucket: `POST /api/s3-upload` answers a presigned policy, `POST /uploads` takes the multipart
 file and keeps its bytes in memory, and `GET /uploads/<key>` serves them back to Coil.
 
+Run it with `FAKE_DISABLE_UPLOADS=1` to answer `503` on `/api/s3-upload` instead, which is what a
+real instance without `ENABLE_EXPENSE_DOCUMENTS` does. The app asks that endpoint once per server
+and hides the receipt photo row in the expense form when the answer is an error, so this is how
+that branch is checked:
+
+```sh
+PORT=8790 FAKE_DISABLE_UPLOADS=1 node tools/fake-spliit/server.mjs
+```
+
 Two things that cost time the first run:
 
 - Use Node, not Bun: Bun's HTTP server dropped responses to OkHttp keep-alive connections, which

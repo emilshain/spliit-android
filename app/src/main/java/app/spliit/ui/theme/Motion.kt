@@ -1,5 +1,9 @@
 package app.spliit.ui.theme
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -72,6 +76,37 @@ object SpliitMotion {
     const val SHORT_MILLIS = 150
     const val MEDIUM_MILLIS = 250
     const val LONG_MILLIS = 400
+
+    /**
+     * The spring a whole page moves on.
+     *
+     * It is a spring rather than a duration on purpose, and it is critically damped:
+     *
+     * - A spring animates from the frame clock, so it runs the same whether or not the system
+     *   animation scale is touched; a timed tween is the first thing to disappear when it is,
+     *   and a push that does not move at all reads as broken rather than fast.
+     * - Damping 1 removes the overshoot [spatialSlow] has. Overshoot is what makes a card land;
+     *   on a whole screen it is a page that travels past its edge, shows a strip of background,
+     *   and comes back.
+     *
+     * 700 stiffness settles in about a third of a second: the page is in place by the time the
+     * eye has followed it, and the outgoing page — a quarter of the distance — finishes first.
+     */
+    fun <T> pageSlide(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 700f)
+
+    /** The incoming page of a push (or of a pop, mirrored). */
+    fun pageEnter(forward: Boolean): EnterTransition = slideInHorizontally(
+        animationSpec = pageSlide(),
+    ) { width -> if (forward) width else -width / 4 }
+
+    /**
+     * The page being left behind. It moves a quarter of the way, so the two pages keep their
+     * relative depth without the outgoing screen competing with the incoming one.
+     */
+    fun pageExit(forward: Boolean): ExitTransition = slideOutHorizontally(
+        animationSpec = pageSlide(),
+    ) { width -> if (forward) -width / 4 else width }
 
     // SwiftUI's spring presets.
     //

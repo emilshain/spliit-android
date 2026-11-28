@@ -230,6 +230,13 @@ const server = createServer((request, response) => {
     // then reads the document back from `<url>/<key>`. Nothing is signed here — the bytes are kept
     // in memory so the thumbnail the app draws is really the photograph it just sent.
     if (url.pathname === "/api/s3-upload") {
+      // A real instance without `ENABLE_EXPENSE_DOCUMENTS` has no bucket to sign for and answers
+      // with an error. `FAKE_DISABLE_UPLOADS=1` reproduces that, so the app's per-server feature
+      // check can be exercised without an S3-less deployment.
+      if (process.env.FAKE_DISABLE_UPLOADS === "1") {
+        send(JSON.stringify({ error: "Expense documents are disabled on this instance." }), 503);
+        return;
+      }
       const key = `receipt-${++uploadCount}.jpg`;
       send(JSON.stringify({ url: `http://${request.headers.host}/uploads`, fields: { key } }));
       return;

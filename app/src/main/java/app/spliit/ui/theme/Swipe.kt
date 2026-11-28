@@ -133,11 +133,14 @@ fun ExpressiveSwipe(
                                     return@launch
                                 }
                                 val (chosen, direction) = action as Pair<SwipeAction, Int>
+                                // The row always travels its full width: the swipe commits to the
+                                // action it revealed, whether that action takes the row away or
+                                // leaves it in the list.
                                 glideTo(direction * width, SpliitMotion.spatialFast())
                                 if (chosen.collapses) {
-                                    // The row has gone off the edge; what is left on screen is
-                                    // the panel, and it closes to nothing rather than waiting
-                                    // there for the list to drop the row.
+                                    // The row is on its way out: what it leaves behind is the
+                                    // panel, and it closes to nothing rather than waiting there
+                                    // for the list to drop the row.
                                     animate(
                                         initialValue = 1f,
                                         targetValue = 0f,
@@ -150,11 +153,15 @@ fun ExpressiveSwipe(
                                     ) { value, _ -> shrink = value }
                                     chosen.onAction()
                                 } else {
+                                    // A toggle leaves the row in the list, and the order matters:
+                                    // the row springs home *first*, and the action is applied once
+                                    // it has landed. Applying it first re-sorts the list, which
+                                    // disposes this row mid-glide — that is the card that used to
+                                    // vanish and reappear with no movement at all. The way home is
+                                    // the fast spatial spring, so the return is over before the
+                                    // list has finished re-sorting.
+                                    glideTo(0f, SpliitMotion.spatialFast())
                                     chosen.onAction()
-                                    // A toggle leaves the row where it was; the list re-renders it
-                                    // with the new state once it has sprung back.
-                                    glideTo(0f, SpliitMotion.spatialDefault())
-                                    offset = 0f
                                 }
                             } finally {
                                 // Never leave the row settled at a half position, whatever happened.

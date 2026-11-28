@@ -13,8 +13,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -92,7 +90,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
 import app.spliit.AppContainer
 import app.spliit.data.local.ActiveParticipant
 import app.spliit.data.local.RecentGroup
@@ -358,17 +355,11 @@ fun GroupScreen(
     AnimatedContent(
         targetState = page,
         transitionSpec = {
-            val spatial = SpliitMotion.spatialSlow<IntOffset>()
             val forward = targetState != GroupPage.MAIN
             // Slides only, the way SwiftUI pushes: nothing fades, so no frame shows the page
-            // behind through a half-transparent screen.
-            if (forward) {
-                slideInHorizontally(spatial) { it } togetherWith
-                    slideOutHorizontally(spatial) { -it / 4 }
-            } else {
-                slideInHorizontally(spatial) { -it / 4 } togetherWith
-                    slideOutHorizontally(spatial) { it }
-            }
+            // behind through a half-transparent screen. Timed, not sprung: a page-sized spring
+            // overshoots its own edge, which reads as a bounce rather than a push.
+            SpliitMotion.pageEnter(forward) togetherWith SpliitMotion.pageExit(forward)
         },
         label = "group page",
     ) { page ->
@@ -731,6 +722,7 @@ fun GroupScreen(
             initialDraft = presentation.draft,
             mintedExpenseId = presentation.mintedId,
             categories = model.categories,
+            receiptsEnabled = model.receiptsSupported,
             instanceUrl = model.instanceUrl ?: ServerInstance.DEFAULT_BASE_URL,
             actorId = model.actorId,
             onDismiss = { sheet = null },

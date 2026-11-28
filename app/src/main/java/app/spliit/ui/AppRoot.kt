@@ -3,8 +3,6 @@ package app.spliit.ui
 import android.app.Activity
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntOffset
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
@@ -64,27 +61,18 @@ fun SpliitApp(container: AppContainer) {
 
         val navController = rememberNavController()
 
-        // A push in SwiftUI is a push: the new screen slides in from the trailing edge on a
-        // spring while the one behind it shifts a quarter of the way. Nothing fades, so no
-        // frame ever shows the window between the two screens.
-        val spatial = SpliitMotion.spatialSlow<IntOffset>()
-
+        // A push is a push: the new screen slides in from the trailing edge while the one behind
+        // it shifts a quarter of the way. Nothing fades, so no frame ever shows the window
+        // between the two screens, and the slide is timed rather than sprung — a spring this size
+        // overshoots, which on a full screen is a page that goes past its edge and bounces back.
         NavHost(
             navController = navController,
             startDestination = GROUPS,
             modifier = Modifier.fillMaxSize().background(background),
-            enterTransition = {
-                slideInHorizontally(spatial) { width -> width }
-            },
-            exitTransition = {
-                slideOutHorizontally(spatial) { width -> -width / 4 }
-            },
-            popEnterTransition = {
-                slideInHorizontally(spatial) { width -> -width / 4 }
-            },
-            popExitTransition = {
-                slideOutHorizontally(spatial) { width -> width }
-            },
+            enterTransition = { SpliitMotion.pageEnter(forward = true) },
+            exitTransition = { SpliitMotion.pageExit(forward = true) },
+            popEnterTransition = { SpliitMotion.pageEnter(forward = false) },
+            popExitTransition = { SpliitMotion.pageExit(forward = false) },
         ) {
             composable(GROUPS) {
                 GroupsListScreen(

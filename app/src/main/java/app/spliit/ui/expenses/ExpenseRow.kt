@@ -158,8 +158,9 @@ fun ExpenseRow(
 
     val container = modifier
         .fillMaxWidth()
-        // Neighbours in a day nearly touch; the shared edge keeps the small corner.
-        .padding(horizontal = SpliitDimens.ScreenGutter, vertical = SpliitDimens.CardGap)
+        // The gutter only: the gap to the row above is the list's, applied through
+        // `stackedCardPadding`, so every stack in the app spaces its rows the same way.
+        .padding(horizontal = SpliitDimens.ScreenGutter)
         .then(
             if (onClick != null) Modifier.pressScale(interactionSource, pressedScale = 0.98f)
             else Modifier,

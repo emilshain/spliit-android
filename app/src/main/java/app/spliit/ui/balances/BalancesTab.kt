@@ -55,6 +55,8 @@ import app.spliit.ui.group.GroupScreenModel
 import app.spliit.ui.theme.EmptyState
 import app.spliit.ui.theme.EmptyStateArt
 import app.spliit.ui.theme.ExpandChevron
+import app.spliit.ui.theme.stackedCardPadding
+import app.spliit.ui.theme.stackedCardShape
 import app.spliit.ui.theme.SpliitDimens
 import app.spliit.ui.theme.SpliitMotion
 import app.spliit.ui.theme.LocalSpliitColors
@@ -195,7 +197,9 @@ private fun SuggestedPaymentsCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = SpliitDimens.ScreenGutter)
-            .padding(top = 4.dp, bottom = 2.dp),
+            // A card of its own after the balances stack, not another row of it: the balances
+            // end where the stack ends, and the suggestions are a separate thing to act on.
+            .padding(top = SpliitDimens.Space200),
         shape = RoundedCornerShape(SpliitDimens.CardCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -256,10 +260,11 @@ private fun SuggestedPaymentsCard(
                             to = model.participant(reimbursement.to),
                             toPosition = model.participantPosition(reimbursement.to),
                             amount = model.moneyFormatter.string(reimbursement.amount),
-                            shape = stackedShape(
+                            shape = stackedCardShape(
                                 first = index == 0,
                                 last = index == model.reimbursements.lastIndex,
                             ),
+                            first = index == 0,
                             horizontalPadding = 0.dp,
                             onSettle = { onSettle(reimbursement) },
                         )
@@ -269,15 +274,6 @@ private fun SuggestedPaymentsCard(
         }
     }
 }
-
-/** The two corners a stacked card owns, and the two it shares with the card beside it. */
-private fun stackedShape(first: Boolean, last: Boolean): RoundedCornerShape = RoundedCornerShape(
-    topStart = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    topEnd = if (first) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    bottomStart = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-    bottomEnd = if (last) SpliitDimens.CardCorner else SpliitDimens.AdjacentCorner,
-)
-
 
 /**
  * The reader's own balance, and the way into the payments that would settle it.
@@ -303,7 +299,7 @@ private fun YouCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = SpliitDimens.ScreenGutter),
         shape = RoundedCornerShape(SpliitDimens.CardCorner),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -367,9 +363,8 @@ private fun BalanceCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(top = if (first) 4.dp else 0.dp, bottom = 2.dp),
-        shape = stackedShape(first = first, last = last),
+            .stackedCardPadding(first),
+        shape = stackedCardShape(first = first, last = last),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         BalanceRow(
@@ -489,6 +484,7 @@ private fun ReimbursementCard(
     toPosition: Int,
     amount: String,
     shape: RoundedCornerShape,
+    first: Boolean = true,
     horizontalPadding: Dp = SpliitDimens.ScreenGutter,
     onSettle: () -> Unit,
 ) {
@@ -496,7 +492,7 @@ private fun ReimbursementCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = horizontalPadding)
-            .padding(top = 4.dp, bottom = 2.dp),
+            .padding(top = if (first) SpliitDimens.Space0 else SpliitDimens.CardGap),
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
