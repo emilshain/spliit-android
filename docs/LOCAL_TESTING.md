@@ -77,8 +77,12 @@ Two things that cost time the first run:
 
 ## 3. Install and point it at the instance
 
-The debug build allows cleartext (`app/src/debug/AndroidManifest.xml`), so it can reach the host
-over plain http; the release build cannot. The emulator reaches the host as `10.0.2.2`.
+The debug build allows cleartext for the emulator host and loopback only
+(`app/src/debug/res/xml/network_security_config.xml`, applied by `app/src/debug/AndroidManifest.xml`),
+so it can reach the fake server over plain http; the release build allows none. The emulator
+reaches the host as `10.0.2.2`. To use a real phone against a server on the LAN, add that
+machine's IP as a `<domain>` in the same file: Android's network security config cannot allow a
+whole subnet.
 
 ```sh
 ./gradlew :app:assembleDebug

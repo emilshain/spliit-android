@@ -12,9 +12,14 @@
         </intent>
     </queries>
 
+    <!-- Nothing here is backed up. A Spliit group ID is the group's only credential — whoever
+         holds it can read and write the group — and this device is its only copy: it lives in
+         the recent-groups store, beside the server address and any expense waiting in the
+         outbox. Auto Backup would put all of that in Google's cloud and in a device-to-device
+         transfer, so it is off, and a reinstall means adding the group again from its link. -->
     <application
         android:name=".SpliitApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
