@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -133,33 +134,39 @@ fun ExpressiveSwipe(
                                     return@launch
                                 }
                                 val (chosen, direction) = action as Pair<SwipeAction, Int>
-                                // The row always travels its full width: the swipe commits to the
-                                // action it revealed, whether that action takes the row away or
-                                // leaves it in the list.
-                                glideTo(direction * width, SpliitMotion.spatialFast())
                                 if (chosen.collapses) {
-                                    // The row is on its way out: what it leaves behind is the
-                                    // panel, and it closes to nothing rather than waiting there
-                                    // for the list to drop the row.
-                                    animate(
-                                        initialValue = 1f,
-                                        targetValue = 0f,
-                                        animationSpec = SpliitMotion.spatialDefault(),
-                                    ) { value, _ -> panelOpen = value }
-                                    animate(
-                                        initialValue = 0f,
-                                        targetValue = 1f,
-                                        animationSpec = SpliitMotion.spatialFast(),
-                                    ) { value, _ -> shrink = value }
+                                    // One motion, not a glide and then a collapse: the row leaves,
+                                    // the panel closes behind it and the gap it leaves closes too,
+                                    // all on the same spring. Sequencing them made the swipe stop
+                                    // at the edge before the row folded away.
+                                    coroutineScope {
+                                        launch { glideTo(direction * width, SpliitMotion.spatialFast()) }
+                                        launch {
+                                            animate(
+                                                initialValue = 1f,
+                                                targetValue = 0f,
+                                                animationSpec = SpliitMotion.spatialFast(),
+                                            ) { value, _ -> panelOpen = value }
+                                        }
+                                        launch {
+                                            animate(
+                                                initialValue = 0f,
+                                                targetValue = 1f,
+                                                animationSpec = SpliitMotion.spatialFast(),
+                                            ) { value, _ -> shrink = value }
+                                        }
+                                    }
                                     chosen.onAction()
                                 } else {
-                                    // A toggle leaves the row in the list, and the order matters:
-                                    // the row springs home *first*, and the action is applied once
-                                    // it has landed. Applying it first re-sorts the list, which
-                                    // disposes this row mid-glide — that is the card that used to
-                                    // vanish and reappear with no movement at all. The way home is
-                                    // the fast spatial spring, so the return is over before the
-                                    // list has finished re-sorting.
+                                    // A toggle leaves the row in the list, so it returns home in a
+                                    // single step from wherever the thumb let go. Travelling out
+                                    // to the edge first and springing back from there was the
+                                    // two-part animation: out, then back.
+                                    //
+                                    // The action is applied once the row has landed. Applying it
+                                    // first re-sorts the list, which disposes this row mid-glide —
+                                    // that is the card that used to vanish and reappear with no
+                                    // movement at all.
                                     glideTo(0f, SpliitMotion.spatialFast())
                                     chosen.onAction()
                                 }
